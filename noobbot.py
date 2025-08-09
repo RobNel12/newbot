@@ -203,31 +203,36 @@ class TicketControlsView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
+    def _slug(self, s: str) -> str:
+        s = (s or "").lower().replace(" ", "-")
+        return re.sub(r"[^a-z0-9-]", "", s) or "user"
+
     @discord.ui.button(label="📌 Claim", style=discord.ButtonStyle.success, custom_id="ticket_claim_btn")
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not interaction.user.guild_permissions.manage_channels:
             return await interaction.response.send_message("Only staff can claim tickets.", ephemeral=True)
 
-        # Guard: already claimed?
+        # Read topic metadata
         topic = interaction.channel.topic or ""
-        parts = topic.split("|")
-        meta = dict(p.split("=", 1) for p in parts if "=" in p)
+        parts = [p for p in topic.split("|") if "=" in p]
+        meta = dict(p.split("=", 1) for p in parts)
+
+        # Stop double-claim
         if meta.get("claimed") and meta.get("claimed") != "none":
             return await interaction.response.send_message("This ticket is already claimed.", ephemeral=True)
 
-        # Build clean name: <seq>-<opener>-<claimer>
-        old = interaction.channel.name
-        m = re.match(r"^(\d{3})-([a-z0-9-]+)(?:-(?:unclaimed|\(unclaimed\)))?(?:-([a-z0-9-]+))?$", old)
-        if m:
-            seq = m.group(1)
-            opener_slug = m.group(2)
-        else:
-            # Fallback if pattern doesn’t match
-            parts_name = old.split("-")
-            seq = parts_name[0] if parts_name and parts_name[0].isdigit() else "000"
-            opener_slug = (parts_name[1] if len(parts_name) > 1 else interaction.user.name).lower()
+        # Get opener from topic; fall back to current user
+        opener_id = int(meta.get("opener") or interaction.user.id)
+        opener = interaction.guild.get_member(opener_id) or interaction.user
 
-        claimer_slug = (interaction.user.display_name or interaction.user.name).lower().replace(" ", "-")
+        # Extract 3-digit ticket sequence from the CURRENT name (prefix only)
+        m = re.match(r"^(\d{3})", interaction.channel.name)
+        seq = m.group(1) if m else "000"
+
+        opener_slug = self._slug(opener.display_name or opener.name)
+        claimer_slug = self._slug(interaction.user.display_name or interaction.user.name)
+
+        # Build a CLEAN name: <seq>-<opener>-<claimer>
         new_name = f"{seq}-{opener_slug}-{claimer_slug}"
 
         # Update topic meta
