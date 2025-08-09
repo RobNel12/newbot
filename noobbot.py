@@ -62,24 +62,25 @@ class CombinedBot(commands.Bot):
         self.store = load_all()
 
     async def setup_hook(self):
-        # Views for Ticket Panels and Coach Panels will be added later
-        self.add_view(TicketPanelView(self))
-        self.add_view(CoachControlsView(self))
-        self.add_view(OpenCoachTicketView(self))
+    # Always add core views
+    self.add_view(TicketControlsView(self))
+    self.add_view(CoachControlsView(self))
+    self.add_view(OpenCoachTicketView(self))
 
-        gid = os.getenv("GUILD_ID")
-        if gid:
-            guild = discord.Object(id=int(gid))
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-        else:
-            await self.tree.sync()
+    # Add all saved ticket panels so their buttons keep working after restart
+    for gid, gdata in self.store.items():
+        panels = gdata.get("tickets", {}).get("panels", {})
+        for pid in panels.keys():
+            self.add_view(OpenPanelView(self, guild_id=int(gid), panel_id=int(pid)))
 
-    def gcfg(self, gid: int) -> Dict[str, Any]:
-        return ensure_guild(self.store, gid)
-
-    def save(self):
-        save_all(self.store)
+    # Slash sync
+    gid = os.getenv("GUILD_ID")
+    if gid:
+        guild = discord.Object(id=int(gid))
+        self.tree.copy_global_to(guild=guild)
+        await self.tree.sync(guild=guild)
+    else:
+        await self.tree.sync()
 
 bot = CombinedBot()
 # ---------- Ticket Panel System ----------
