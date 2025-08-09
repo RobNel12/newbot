@@ -472,7 +472,7 @@ async def tickets_panels_list(interaction: discord.Interaction):
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
 bot.tree.add_command(tickets_panels_list)
-bot.tree.add_command(panel_roles)
+bot.tree.add_command(tickets_panel_roles)
 bot.tree.add_command(coach_setup_cmd)
 bot.tree.add_command(coach_panel_cmd)
 # ---------- Run Bot ----------
