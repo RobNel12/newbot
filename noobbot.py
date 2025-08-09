@@ -204,26 +204,25 @@ class TicketControlsView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="📌 Claim", style=discord.ButtonStyle.success, custom_id="ticket_claim_btn")
-    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
     if not interaction.user.guild_permissions.manage_channels:
         return await interaction.response.send_message("Only staff can claim tickets.", ephemeral=True)
 
-    # guard: already claimed?
+    # Guard: already claimed?
     topic = interaction.channel.topic or ""
     parts = topic.split("|")
     meta = dict(p.split("=", 1) for p in parts if "=" in p)
     if meta.get("claimed") and meta.get("claimed") != "none":
         return await interaction.response.send_message("This ticket is already claimed.", ephemeral=True)
 
-    # build clean name: <seq>-<opener>-<claimer>
+    # Build clean name: <seq>-<opener>-<claimer>
     old = interaction.channel.name
     m = re.match(r"^(\d{3})-([a-z0-9-]+)(?:-(?:unclaimed|\(unclaimed\)))?(?:-([a-z0-9-]+))?$", old)
     if m:
         seq = m.group(1)
         opener_slug = m.group(2)
     else:
-        # fallback if the pattern doesn’t match
-        # try to keep the first two parts as seq/opener if present
+        # Fallback if pattern doesn’t match
         parts_name = old.split("-")
         seq = parts_name[0] if parts_name and parts_name[0].isdigit() else "000"
         opener_slug = (parts_name[1] if len(parts_name) > 1 else interaction.user.name).lower()
@@ -231,7 +230,7 @@ class TicketControlsView(discord.ui.View):
     claimer_slug = (interaction.user.display_name or interaction.user.name).lower().replace(" ", "-")
     new_name = f"{seq}-{opener_slug}-{claimer_slug}"
 
-    # update topic meta
+    # Update topic meta
     meta["claimed"] = str(interaction.user.id)
     new_topic = "|".join(f"{k}={v}" for k, v in meta.items())
 
