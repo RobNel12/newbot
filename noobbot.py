@@ -284,7 +284,7 @@ Session Length & Structure:
 Availability (with Time Zone):
 [e.g., Weeknights 6–9 PM EST, Weekends flexible]
     
-    Voice Chat Options:
+Voice Chat Options:
     
 Past Student Feedback:
 (Optional — quotes, success stories, or notable improvements)
@@ -327,51 +327,27 @@ class CoachControlsView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="📥 Submit", style=discord.ButtonStyle.success, custom_id="coach_submit_btn")
-    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
-        topic = interaction.channel.topic or ""
-        if f"opener={interaction.user.id}" not in topic:
-            return await interaction.response.send_message("Only the opener can submit.", ephemeral=True)
+async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
+    topic = interaction.channel.topic or ""
+    if f"opener={interaction.user.id}" not in topic:
+        return await interaction.response.send_message("Only the opener can submit.", ephemeral=True)
 
-        async for m in interaction.channel.history(limit=50, oldest_first=False):
-            if m.author == interaction.user and not m.author.bot and m.content:
-                g = self.bot.gcfg(interaction.guild_id)["coach"]
-                new_topic = topic.replace("submitted=none", f"submitted={m.id}")
-                await interaction.channel.edit(topic=new_topic)
-                return await interaction.response.send_message("✅ Submitted for review.", ephemeral=True)
-        await interaction.response.send_message("Couldn't find your template message.", ephemeral=True)
+    async for m in interaction.channel.history(limit=50, oldest_first=False):
+        if m.author == interaction.user and not m.author.bot and m.content:
+            g = self.bot.gcfg(interaction.guild_id)["coach"]
+            new_topic = topic.replace("submitted=none", f"submitted={m.id}")
+            await interaction.channel.edit(topic=new_topic)
 
-    @discord.ui.button(label="✅ Approve (Admin)", style=discord.ButtonStyle.primary, custom_id="coach_approve_btn")
-    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.user.guild_permissions.manage_channels:
-            return await interaction.response.send_message("Admins only.", ephemeral=True)
+            # 🔹 Public message to let admins know
+            await interaction.channel.send(
+                "📢 **Application submitted!** An admin may now review it.",
+                allowed_mentions=discord.AllowedMentions(everyone=False, roles=True, users=False)
+            )
 
-        topic = interaction.channel.topic or ""
-        parts = dict(p.split("=") for p in topic.split("|") if "=" in p)
-        msg_id = parts.get("submitted")
-        if not msg_id or msg_id == "none":
-            return await interaction.response.send_message("No submission to approve.", ephemeral=True)
+            # Private confirmation to the submitter
+            return await interaction.response.send_message("✅ Submitted for review.", ephemeral=True)
 
-        try:
-            msg = await interaction.channel.fetch_message(int(msg_id))
-        except:
-            return await interaction.response.send_message("Submission message not found.", ephemeral=True)
-
-        g = self.bot.gcfg(interaction.guild_id)["coach"]
-        roster_ch = interaction.guild.get_channel(g.get("roster_channel_id"))
-        if not roster_ch:
-            return await interaction.response.send_message("Roster channel not set.", ephemeral=True)
-
-        entry_id = g["next_entry_id"]
-        g["next_entry_id"] += 1
-        self.bot.save()
-
-        embed = discord.Embed(title=f"Coach #{entry_id:03d}", description=msg.content, color=discord.Color.green())
-        embed.add_field(name="User", value=msg.author.mention)
-        await roster_ch.send(embed=embed)
-
-        new_topic = topic.replace("approved=none", f"approved={entry_id}")
-        await interaction.channel.edit(topic=new_topic)
-        await interaction.response.send_message(f"Approved and added to roster as #{entry_id:03d}", ephemeral=True)
+    await interaction.response.send_message("Couldn't find your template message.", ephemeral=True)
 
     @discord.ui.button(label="🧾 Close & Log (Admin)", style=discord.ButtonStyle.danger, custom_id="coach_close_btn")
     async def close_and_log(self, interaction: discord.Interaction, button: discord.ui.Button):
