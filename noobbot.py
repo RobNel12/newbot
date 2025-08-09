@@ -83,38 +83,80 @@ class CombinedBot(commands.Bot):
 
 bot = CombinedBot()
 # ---------- Ticket Panel System ----------
-class TicketPanelView(discord.ui.View):
-    def __init__(self, bot: CombinedBot):
+OPEN_PREFIX  = "ultra_ticket_open"  # custom_id = f"{OPEN_PREFIX}:{guild_id}:{panel_id}"
+CLAIM_ID     = "ultra_ticket_claim_v1"
+CLOSE_ID     = "ultra_ticket_close_v1"
+
+class OpenPanelView(discord.ui.View):
+    """Persistent 'Open Ticket' button for a specific panel (has its own category, text, roles)."""
+    def __init__(self, bot: CombinedBot, guild_id: int, panel_id: int):
         super().__init__(timeout=None)
         self.bot = bot
+        self.guild_id = guild_id
+        self.panel_id = panel_id
 
-    @discord.ui.button(label="🎫 Open Ticket", style=discord.ButtonStyle.primary, custom_id="ticket_open_btn")
-    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        g = self.bot.gcfg(interaction.guild_id)
-        tickets_cfg = g["tickets"]
-        category_id = tickets_cfg.get("category_id")
-        if not category_id:
-            return await interaction.response.send_message("No ticket category set.", ephemeral=True)
+        btn = discord.ui.Button(
+            label="🎫 Open Ticket",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"{OPEN_PREFIX}:{guild_id}:{panel_id}",
+        )
+        btn.callback = self.open_ticket
+        self.add_item(btn)
 
-        category = interaction.guild.get_channel(category_id)
+    async def open_ticket(self, interaction: discord.Interaction):
+        if not interaction.guild or interaction.guild.id != self.guild_id:
+            return await interaction.response.send_message("Use this in the right server.", ephemeral=True)
+
+        g = self.bot.gcfg(self.guild_id)
+        ts = g["tickets"]
+        panel = ts["panels"].get(str(self.panel_id))
+        if not panel:
+            return await interaction.response.send_message("This panel is no longer configured.", ephemeral=True)
+
+        category = interaction.guild.get_channel(panel["category_id"])
         if not isinstance(category, discord.CategoryChannel):
-            return await interaction.response.send_message("Configured category not found.", ephemeral=True)
+            return await interaction.response.send_message("Panel category no longer exists. Ask an admin to reconfigure.", ephemeral=True)
 
-        ticket_id = tickets_cfg["next_ticket_id"]
-        tickets_cfg["next_ticket_id"] += 1
+        # One ticket per user per panel
+        for ch in interaction.guild.text_channels:
+            topic = ch.topic or ""
+            if f"panel={self.panel_id}" in topic and f"opener={interaction.user.id}" in topic:
+                return await interaction.response.send_message(f"You already have a ticket for this panel: {ch.mention}", ephemeral=True)
+
+        # Next ticket id
+        ticket_seq = ts["next_ticket_seq"]
+        ts["next_ticket_seq"] = ticket_seq + 1
         self.bot.save()
 
-        name = f"{ticket_id:03d}-{interaction.user.name.lower()}"
-        topic = f"ticket|opener={interaction.user.id}|claimed=none"
+        opener_name = (interaction.user.display_name or interaction.user.name).lower().replace(" ", "-")
+        name = f"{ticket_seq:03d}-{opener_name}-(unclaimed)"
+
+        # Overwrites: opener, bot, panel roles, admins
         overwrites = {
             interaction.guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
-            interaction.guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_channels=True),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True, embed_links=True),
+            interaction.guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True, read_message_history=True),
         }
+        for rid in panel.get("role_ids", []):
+            role = interaction.guild.get_role(rid)
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True)
+        for role in interaction.guild.roles:
+            if role.permissions.manage_channels:
+                overwrites.setdefault(role, discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, manage_messages=True))
 
-        ch = await interaction.guild.create_text_channel(name=name, category=category, overwrites=overwrites, topic=topic)
-        await ch.send(f"Ticket opened by {interaction.user.mention}", view=TicketControlsView(self.bot))
+        topic = f"ticket_meta|panel={self.panel_id}|ticket={ticket_seq}|opener={interaction.user.id}|claimer=none"
+        ch = await interaction.guild.create_text_channel(
+            name=name, category=category, overwrites=overwrites, topic=topic
+        )
+
         await interaction.response.send_message(f"Ticket created: {ch.mention}", ephemeral=True)
+
+        open_text = panel.get("open_text") or "A staff member will be with you shortly."
+        await ch.send(
+            f"Hey {interaction.user.mention}! {open_text}\n\nUse the buttons below to **Claim** or **Close & Transcript**.",
+            view=TicketControlsView(self.bot),
+        )
 
 class TicketControlsView(discord.ui.View):
     def __init__(self, bot: CombinedBot):
