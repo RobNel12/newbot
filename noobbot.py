@@ -35,16 +35,20 @@ def save_all(data: Dict[str, Any]) -> None:
 
 def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
     g = data.setdefault(str(gid), {})
-    # Ticket system
-    g.setdefault("tickets", {"category_id": None, "log_channel_id": None, "panels": {}, "next_ticket_id": 1})
-    # Coach system
-    g.setdefault("coach", {
-        "category_id": None,
-        "roster_channel_id": None,
-        "log_channel_id": None,
-        "next_entry_id": 1,
-        "template_text": None
-    })
+    # Tickets (per-panel categories)
+    t = g.setdefault("tickets", {})
+    t.setdefault("log_channel_id", None)          # transcript log for tickets (optional)
+    t.setdefault("panels", {})                    # {panel_id: {"category_id": int, "open_text": str, "role_ids": [int,...]}}
+    t.setdefault("next_panel_id", 1)
+    t.setdefault("next_ticket_seq", 1)
+
+    # Coach (unchanged)
+    c = g.setdefault("coach", {})
+    c.setdefault("category_id", None)
+    c.setdefault("roster_channel_id", None)
+    c.setdefault("log_channel_id", None)
+    c.setdefault("next_entry_id", 1)
+    c.setdefault("template_text", None)
     return g
 # ---------- Bot Class ----------
 intents = discord.Intents.default()
