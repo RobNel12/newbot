@@ -204,7 +204,7 @@ class TicketControlsView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="📌 Claim", style=discord.ButtonStyle.success, custom_id="ticket_claim_btn")
-async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
     if not interaction.user.guild_permissions.manage_channels:
         return await interaction.response.send_message("Only staff can claim tickets.", ephemeral=True)
 
