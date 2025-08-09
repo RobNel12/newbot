@@ -321,6 +321,7 @@ class OpenCoachTicketView(discord.ui.View):
         await ch.send(g.get("template_text") or DEFAULT_TEMPLATE, view=CoachControlsView(self.bot))
         await interaction.response.send_message(f"Application ticket created: {ch.mention}", ephemeral=True)
 
+
 class CoachControlsView(discord.ui.View):
     def __init__(self, bot: CombinedBot):
         super().__init__(timeout=None)
@@ -328,9 +329,11 @@ class CoachControlsView(discord.ui.View):
 
     @discord.ui.button(label="📥 Submit", style=discord.ButtonStyle.success, custom_id="coach_submit_btn")
     async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
-    topic = interaction.channel.topic or ""
-    if f"opener={interaction.user.id}" not in topic:
-        return await interaction.response.send_message("Only the opener can submit.", ephemeral=True)
+        topic = interaction.channel.topic or ""
+        if f"opener={interaction.user.id}" not in topic:
+            return await interaction.response.send_message("Only the opener can submit.", ephemeral=True)
+
+        # rest of your code...
 
     async for m in interaction.channel.history(limit=50, oldest_first=False):
         if m.author == interaction.user and not m.author.bot and m.content:
