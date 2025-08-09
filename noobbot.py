@@ -469,12 +469,12 @@ async def tickets_panels_list(interaction: discord.Interaction):
         lines.append(f"**#{pid}** • Category: **{getattr(cat, 'name', 'Unknown')}** • Roles: {role_mentions}")
     await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
-bot.tree.add_command(setup)
-bot.tree.add_command(panel)
-bot.tree.add_command(panels)
+bot.tree.add_command(tickets_setup)
+bot.tree.add_command(tickets_panel)
+bot.tree.add_command(tickets_panels_list)
 bot.tree.add_command(panel_roles)
-bot.tree.add_command(coach_setup)
-bot.tree.add_command(coach_panel)
+bot.tree.add_command(coach_setup_cmd)
+bot.tree.add_command(coach_panel_cmd)
 # ---------- Run Bot ----------
 def main():
     token = os.getenv("DISCORD_TOKEN")
