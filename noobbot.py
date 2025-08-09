@@ -63,9 +63,9 @@ class CombinedBot(commands.Bot):
 
     async def setup_hook(self):
     # Always add core views
-    self.add_view(TicketControlsView(self))
-    self.add_view(CoachControlsView(self))
-    self.add_view(OpenCoachTicketView(self))
+        self.add_view(TicketControlsView(self))
+        self.add_view(CoachControlsView(self))
+        self.add_view(OpenCoachTicketView(self))
 
     # Add all saved ticket panels so their buttons keep working after restart
     for gid, gdata in self.store.items():
