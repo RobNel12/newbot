@@ -301,7 +301,7 @@ class OpenCoachTicketView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="🎫 Open Application", style=discord.ButtonStyle.primary, custom_id="coach_open_btn")
-async def open_application(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def open_application(self, interaction: discord.Interaction, button: discord.ui.Button):
         g = self.bot.gcfg(interaction.guild_id)["coach"]
         cat_id = g.get("category_id")
         if not cat_id:
@@ -327,7 +327,7 @@ class CoachControlsView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="📥 Submit", style=discord.ButtonStyle.success, custom_id="coach_submit_btn")
-async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def submit(self, interaction: discord.Interaction, button: discord.ui.Button):
     topic = interaction.channel.topic or ""
     if f"opener={interaction.user.id}" not in topic:
         return await interaction.response.send_message("Only the opener can submit.", ephemeral=True)
