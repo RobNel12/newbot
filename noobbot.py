@@ -366,11 +366,52 @@ async def setup_cmd(interaction: discord.Interaction, category: discord.Category
     bot.save()
     await interaction.response.send_message("✅ Ticket system configured.", ephemeral=True)
 
-@app_commands.command(name="panel", description="Post a ticket panel in the current channel")
+@app_commands.command(
+    name="panel",
+    description="Create a ticket panel with its own category, intro text, and handler roles"
+)
 @app_commands.checks.has_permissions(manage_guild=True)
-async def panel_cmd(interaction: discord.Interaction):
-    await interaction.channel.send("Click below to open a ticket.", view=TicketPanelView(bot))
-    await interaction.response.send_message("Panel posted.", ephemeral=True)
+async def tickets_panel(
+    interaction: discord.Interaction,
+    category: discord.CategoryChannel,
+    panel_text: Optional[str] = None,
+    ticket_open_text: Optional[str] = None,
+    role1: Optional[discord.Role] = None,
+    role2: Optional[discord.Role] = None,
+    role3: Optional[discord.Role] = None,
+    role4: Optional[discord.Role] = None,
+    role5: Optional[discord.Role] = None,
+    post_in: Optional[discord.TextChannel] = None,
+):
+    target = post_in or interaction.channel
+    if not isinstance(target, discord.TextChannel):
+        return await interaction.response.send_message("Pick a text channel to post the panel.", ephemeral=True)
+
+    g = bot.gcfg(interaction.guild_id)
+    ts = g["tickets"]
+
+    panel_id = ts["next_panel_id"]
+    ts["next_panel_id"] = panel_id + 1
+    ts["panels"][str(panel_id)] = {
+        "category_id": category.id,
+        "open_text": ticket_open_text or "A staff member will be with you shortly.",
+        "role_ids": [r.id for r in [role1, role2, role3, role4, role5] if r],
+    }
+    bot.save()
+
+    view = OpenPanelView(bot, guild_id=interaction.guild_id, panel_id=panel_id)
+    bot.add_view(view)  # persist this button across restarts
+
+    msg = panel_text or "Need help? Click below to open a private ticket."
+    await target.send(msg, view=view)
+
+    roles_str = ", ".join(r.mention for r in [role1, role2, role3, role4, role5] if r) or "None"
+    await interaction.response.send_message(
+        f"✅ Panel **#{panel_id}** posted in {target.mention}\n"
+        f"• Category: **{category.name}**\n"
+        f"• Handler roles: {roles_str}",
+        ephemeral=True
+    )
 
 @app_commands.command(name="coach_setup", description="Set coach application category, roster channel, and log channel")
 @app_commands.checks.has_permissions(manage_guild=True)
