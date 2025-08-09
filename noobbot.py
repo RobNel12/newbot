@@ -301,7 +301,7 @@ class OpenCoachTicketView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="🎫 Open Application", style=discord.ButtonStyle.primary, custom_id="coach_open_btn")
-    async def open_application(self, interaction: discord.Interaction, button: discord.ui.Button):
+async def open_application(self, interaction: discord.Interaction, button: discord.ui.Button):
         g = self.bot.gcfg(interaction.guild_id)["coach"]
         cat_id = g.get("category_id")
         if not cat_id:
