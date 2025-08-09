@@ -339,16 +339,57 @@ class CoachControlsView(discord.ui.View):
                 new_topic = topic.replace("submitted=none", f"submitted={m.id}")
                 await interaction.channel.edit(topic=new_topic)
 
-                # 🔹 Public message to let admins know
+                # Notify in-channel
                 await interaction.channel.send(
                     "📢 **Application submitted!** An admin may now review it.",
                     allowed_mentions=discord.AllowedMentions(everyone=False, roles=True, users=False)
                 )
 
-                # Private confirmation to the submitter
+                # Private confirmation
                 return await interaction.response.send_message("✅ Submitted for review.", ephemeral=True)
 
         await interaction.response.send_message("Couldn't find your template message.", ephemeral=True)
+
+    @discord.ui.button(label="✅ Approve", style=discord.ButtonStyle.primary, custom_id="coach_approve_btn")
+    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not interaction.user.guild_permissions.manage_channels:
+            return await interaction.response.send_message("Admins only.", ephemeral=True)
+
+        g = self.bot.gcfg(interaction.guild_id)["coach"]
+        roster_ch = interaction.guild.get_channel(g.get("roster_channel_id"))
+        if not roster_ch:
+            return await interaction.response.send_message("No roster channel set.", ephemeral=True)
+
+        topic = interaction.channel.topic or ""
+        parts = topic.split("|")
+        opener_id = None
+        submitted_msg_id = None
+        for p in parts:
+            if p.startswith("opener="):
+                opener_id = int(p.split("=")[1])
+            elif p.startswith("submitted="):
+                try:
+                    submitted_msg_id = int(p.split("=")[1])
+                except ValueError:
+                    pass
+
+        if not submitted_msg_id:
+            return await interaction.response.send_message("No submitted message found.", ephemeral=True)
+
+        try:
+            submitted_msg = await interaction.channel.fetch_message(submitted_msg_id)
+        except discord.NotFound:
+            return await interaction.response.send_message("Submitted message not found.", ephemeral=True)
+
+        # Post to roster
+        embed = discord.Embed(
+            title=f"Coach Application - {interaction.guild.get_member(opener_id)}",
+            description=submitted_msg.content,
+            color=discord.Color.green()
+        )
+        await roster_ch.send(embed=embed)
+
+        await interaction.response.send_message("✅ Approved and posted to roster.", ephemeral=True)
 
     @discord.ui.button(label="🧾 Close & Log (Admin)", style=discord.ButtonStyle.danger, custom_id="coach_close_btn")
     async def close_and_log(self, interaction: discord.Interaction, button: discord.ui.Button):
