@@ -154,20 +154,18 @@ class TicketControlsView(discord.ui.View):
         await interaction.channel.delete()
 # ---------- Coach Roster System ----------
 DEFAULT_TEMPLATE = (
-    """
-    ```
-    IGN (In-Game Name):
-    [Your in-game name here]
+"""
+```
+IGN (In-Game Name):
+[Your in-game name here]
     
-    Region / Server Preference:
-    [e.g., NA East, EU Central, etc.]
+Region / Server Preference:
+[e.g., NA East, EU Central, etc.]
     
-    Experience & Background:
-    (Hours played, notable ranks, tournament experience, past teams, etc.)
+Experience & Background:
+(Hours played, notable ranks, tournament experience, past teams, etc.)
     
-    Specialties:
-    (Check all that apply)
-    
+Specialties
     [ ] 1v1 Duels
     
     [ ] Team Fights
@@ -183,8 +181,7 @@ DEFAULT_TEMPLATE = (
     [ ] Other: __________
     
     
-    Coaching Style:
-    
+Coaching Style:
     [ ] Live matches with real-time commentary
     
     [ ] Private duels and drills
@@ -196,21 +193,21 @@ DEFAULT_TEMPLATE = (
     [ ] Other: __________
     
     
-    Session Length & Structure:
-    (Example: “Typically 1-hour sessions with warmup, targeted drills, and live practice.”)
+Session Length & Structure:
+(Example: “Typically 1-hour sessions with warmup, targeted drills, and live practice.”)
     
-    Availability (with Time Zone):
-    [e.g., Weeknights 6–9 PM EST, Weekends flexible]
+Availability (with Time Zone):
+[e.g., Weeknights 6–9 PM EST, Weekends flexible]
     
     Voice Chat Options:
     
-    Past Student Feedback:
-    (Optional — quotes, success stories, or notable improvements)
+Past Student Feedback:
+(Optional — quotes, success stories, or notable improvements)
     
-    Other Notes:
-    (Anything else players should know—ping requirements, competitive focus, preferred communication style, etc.)
-    ```
-    """
+Other Notes:
+(Anything else players should know—ping requirements, competitive focus, preferred communication style, etc.)
+```
+"""
 )
 
 class OpenCoachTicketView(discord.ui.View):
