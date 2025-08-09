@@ -81,6 +81,44 @@ class CombinedBot(commands.Bot):
             await self.tree.sync(guild=guild)
         else:
             await self.tree.sync()
+    # --- ADD THESE TWO METHODS ---
+    def gcfg(self, gid: int) -> Dict[str, Any]:
+        """Return (and initialize if needed) the per-guild config dict."""
+        return ensure_guild(self.store, gid)
+
+    def save(self) -> None:
+        """Persist the in-memory store to disk."""
+        save_all(self.store)
+CONFIG_PATH = "combined_config.json"
+
+def load_all() -> Dict[str, Any]:
+    import json, os
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_all(data: Dict[str, Any]) -> None:
+    import json
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
+    g = data.setdefault(str(gid), {})
+    # Tickets (per-panel)
+    t = g.setdefault("tickets", {})
+    t.setdefault("log_channel_id", None)
+    t.setdefault("panels", {})
+    t.setdefault("next_panel_id", 1)
+    t.setdefault("next_ticket_seq", 1)
+    # Coach
+    c = g.setdefault("coach", {})
+    c.setdefault("category_id", None)
+    c.setdefault("roster_channel_id", None)
+    c.setdefault("log_channel_id", None)
+    c.setdefault("next_entry_id", 1)
+    c.setdefault("template_text", None)
+    return g
 
 bot = CombinedBot()
 # ---------- Ticket Panel System ----------
