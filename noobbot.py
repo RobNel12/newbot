@@ -429,8 +429,48 @@ async def coach_panel_cmd(interaction: discord.Interaction):
     await interaction.channel.send("Click below to open a coach application ticket.", view=OpenCoachTicketView(bot))
     await interaction.response.send_message("Coach panel posted.", ephemeral=True)
 
+@app_commands.command(name="panel_roles", description="Set/replace handler roles for an existing panel")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def tickets_panel_roles(
+    interaction: discord.Interaction,
+    panel_id: int,
+    role1: Optional[discord.Role] = None,
+    role2: Optional[discord.Role] = None,
+    role3: Optional[discord.Role] = None,
+    role4: Optional[discord.Role] = None,
+    role5: Optional[discord.Role] = None,
+):
+    g = bot.gcfg(interaction.guild_id)
+    ts = g["tickets"]
+    key = str(panel_id)
+    if key not in ts["panels"]:
+        return await interaction.response.send_message(f"Panel #{panel_id} not found.", ephemeral=True)
+
+    ts["panels"][key]["role_ids"] = [r.id for r in [role1, role2, role3, role4, role5] if r]
+    bot.save()
+    roles_str = ", ".join(r.mention for r in [role1, role2, role3, role4, role5] if r) or "None"
+    await interaction.response.send_message(f"✅ Updated roles for panel **#{panel_id}** → {roles_str}", ephemeral=True)
+
+@app_commands.command(name="panels", description="List configured ticket panels")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def tickets_panels_list(interaction: discord.Interaction):
+    g = bot.gcfg(interaction.guild_id)
+    ts = g["tickets"]
+    if not ts["panels"]:
+        return await interaction.response.send_message("No panels configured yet.", ephemeral=True)
+
+    lines = []
+    for pid, pdata in sorted(ts["panels"].items(), key=lambda x: int(x[0])):
+        cat = interaction.guild.get_channel(pdata["category_id"])
+        roles = [interaction.guild.get_role(rid) for rid in pdata.get("role_ids", [])]
+        role_mentions = ", ".join(r.mention for r in roles if r) or "None"
+        lines.append(f"**#{pid}** • Category: **{getattr(cat, 'name', 'Unknown')}** • Roles: {role_mentions}")
+    await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
 bot.tree.add_command(setup_cmd)
 bot.tree.add_command(panel_cmd)
+bot.tree.add_command(panels_cmd)
+bot.tree.add_command(panel_roles_cmd)
 bot.tree.add_command(coach_setup_cmd)
 bot.tree.add_command(coach_panel_cmd)
 # ---------- Run Bot ----------
