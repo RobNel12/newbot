@@ -357,14 +357,16 @@ class CoachControlsView(discord.ui.View):
 
         await interaction.channel.delete()
 # ---------- Slash Commands ----------
-@app_commands.command(name="setup", description="Set ticket category and log channel")
+@app_commands.command(name="setup", description="(Tickets) Set a transcript log channel (optional)")
 @app_commands.checks.has_permissions(manage_guild=True)
-async def setup_cmd(interaction: discord.Interaction, category: discord.CategoryChannel, log_channel: discord.TextChannel):
-    g = bot.gcfg(interaction.guild_id)["tickets"]
-    g["category_id"] = category.id
-    g["log_channel_id"] = log_channel.id
-    bot.save()
-    await interaction.response.send_message("✅ Ticket system configured.", ephemeral=True)
+async def tickets_setup(interaction: discord.Interaction, log_channel: Optional[discord.TextChannel] = None):
+    g = bot.gcfg(interaction.guild_id)
+    ts = g["tickets"]
+    if log_channel:
+        ts["log_channel_id"] = log_channel.id
+        bot.save()
+        return await interaction.response.send_message(f"🧾 Tickets log set to {log_channel.mention}.", ephemeral=True)
+    await interaction.response.send_message("🧾 Tickets log unchanged.", ephemeral=True)
 
 @app_commands.command(
     name="panel",
