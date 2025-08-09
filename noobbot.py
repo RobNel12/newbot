@@ -333,24 +333,22 @@ class CoachControlsView(discord.ui.View):
         if f"opener={interaction.user.id}" not in topic:
             return await interaction.response.send_message("Only the opener can submit.", ephemeral=True)
 
-        # rest of your code...
+        async for m in interaction.channel.history(limit=50, oldest_first=False):
+            if m.author == interaction.user and not m.author.bot and m.content:
+                g = self.bot.gcfg(interaction.guild_id)["coach"]
+                new_topic = topic.replace("submitted=none", f"submitted={m.id}")
+                await interaction.channel.edit(topic=new_topic)
 
-    async for m in interaction.channel.history(limit=50, oldest_first=False):
-        if m.author == interaction.user and not m.author.bot and m.content:
-            g = self.bot.gcfg(interaction.guild_id)["coach"]
-            new_topic = topic.replace("submitted=none", f"submitted={m.id}")
-            await interaction.channel.edit(topic=new_topic)
+                # 🔹 Public message to let admins know
+                await interaction.channel.send(
+                    "📢 **Application submitted!** An admin may now review it.",
+                    allowed_mentions=discord.AllowedMentions(everyone=False, roles=True, users=False)
+                )
 
-            # 🔹 Public message to let admins know
-            await interaction.channel.send(
-                "📢 **Application submitted!** An admin may now review it.",
-                allowed_mentions=discord.AllowedMentions(everyone=False, roles=True, users=False)
-            )
+                # Private confirmation to the submitter
+                return await interaction.response.send_message("✅ Submitted for review.", ephemeral=True)
 
-            # Private confirmation to the submitter
-            return await interaction.response.send_message("✅ Submitted for review.", ephemeral=True)
-
-    await interaction.response.send_message("Couldn't find your template message.", ephemeral=True)
+        await interaction.response.send_message("Couldn't find your template message.", ephemeral=True)
 
     @discord.ui.button(label="🧾 Close & Log (Admin)", style=discord.ButtonStyle.danger, custom_id="coach_close_btn")
     async def close_and_log(self, interaction: discord.Interaction, button: discord.ui.Button):
