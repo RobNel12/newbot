@@ -271,49 +271,36 @@ class TicketControlsView(discord.ui.View):
 DEFAULT_TEMPLATE = (
 """
 ```
-IGN (In-Game Name):
-[Your in-game name here]
-    
+In-Game Name:
+PlayfabID: 
 Region / Server Preference:
-[e.g., NA East, EU Central, etc.]
     
-Experience & Background:
-(Hours played, notable ranks, tournament experience, past teams, etc.)
+Hours Played: 
+Casual Level: 
+Current Rank (if applicable): 
+
+Past Ranked or Competitive Experience (if applicable): 
     
-Specialties
-    [ ] 1v1 Duels
+Specialties (check all that apply):
+    [] Duels
+    [] Teamfights (3v3 / 5v5)
+    [] Frontline / Objective Play
+    [] Loadout Optimization
+    [] Movement & Positioning
+    [] Reading Opponents
+    [] Other: 
     
-    [ ] Team Fights
-    
-    [ ] Frontline / Objective Play
-    
-    [ ] Loadout Optimization
-    
-    [ ] Movement & Positioning
-    
-    [ ] Reading Opponents / Feints
-    
-    [ ] Other: __________
-    
-    
-Coaching Style:
-    [ ] Live matches with real-time commentary
-    
-    [ ] Private duels and drills
-    
-    [ ] Recorded match review with feedback
-    
-    [ ] Written guides/tips
-    
-    [ ] Other: __________
+Coaching Style (check all that apply):
+    [] Drills & Private Matches
+    [] Recorded Gameplay Analysis
+    [] Live Match Commentary
+    [] Other: 
     
     
 Session Length & Structure:
 (Example: “Typically 1-hour sessions with warmup, targeted drills, and live practice.”)
     
 Availability (with Time Zone):
-[e.g., Weeknights 6–9 PM EST, Weekends flexible]
-    
 Voice Chat Options:
     
 Past Student Feedback:
