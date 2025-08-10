@@ -502,8 +502,9 @@ class AutoMod(commands.Cog):
             s = s.strip().lower()
             if not s:
                 continue
-            # substring match is intentional—admins control the list
-            if s in low:
+        # Whole-word match, ignores case
+        # \b = word boundary; re.escape ensures exact match
+            if re.search(rf"\b{re.escape(s)}\b", low):
                 return s
         return None
 
