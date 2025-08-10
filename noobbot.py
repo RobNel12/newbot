@@ -730,12 +730,92 @@ async def tickets_panels_list(interaction: discord.Interaction):
         lines.append(f"**#{pid}** • Category: **{getattr(cat, 'name', 'Unknown')}** • Roles: {role_mentions}")
     await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
+@app_commands.command(name="automod_slurs", description="Add/remove/list slur terms (substring match, case-insensitive)")
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(action="What to do", term="Term to add or remove")
+@app_commands.choices(action=[
+    app_commands.Choice(name="add", value="add"),
+    app_commands.Choice(name="remove", value="remove"),
+    app_commands.Choice(name="list", value="list"),
+])
+async def automod_slurs(interaction: discord.Interaction, action: app_commands.Choice[str], term: Optional[str] = None):
+    g = bot.gcfg(interaction.guild_id)["automod"]
+    slurs: list[str] = g.setdefault("slurs", [])
+
+    if action.value == "list":
+        shown = ", ".join(f"`{s}`" for s in slurs) or "_(none)_"
+        return await interaction.response.send_message(f"Current slurs: {shown}", ephemeral=True)
+
+    if not term:
+        return await interaction.response.send_message("Please provide a term.", ephemeral=True)
+
+    t = term.strip()
+    if not t:
+        return await interaction.response.send_message("Empty term not allowed.", ephemeral=True)
+
+    if action.value == "add":
+        if t.lower() in (s.lower() for s in slurs):
+            return await interaction.response.send_message(f"`{t}` already in list.", ephemeral=True)
+        slurs.append(t)
+        bot.save()
+        return await interaction.response.send_message(f"✅ Added `{t}`.", ephemeral=True)
+
+    if action.value == "remove":
+        lowered = [s.lower() for s in slurs]
+        if t.lower() not in lowered:
+            return await interaction.response.send_message(f"`{t}` not found.", ephemeral=True)
+        # remove first case-insensitive match
+        idx = lowered.index(t.lower())
+        slurs.pop(idx)
+        bot.save()
+        return await interaction.response.send_message(f"✅ Removed `{t}`.", ephemeral=True)
+
+@app_commands.command(name="automod_thresholds", description="Tune AutoMod thresholds")
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(
+    spam_window_seconds="Seconds in the spam window",
+    spam_max_messages="Max messages allowed in the window",
+    repeat_max_duplicates="Max allowed repeated chars before flag",
+    mention_limit="Mentions allowed in a single message",
+    caps_ratio_trigger="0.5–1.0 caps ratio trigger (>=20 letters)",
+    timeout_minutes="Timeout to apply on hit (0 = none)",
+)
+async def automod_thresholds(
+    interaction: discord.Interaction,
+    spam_window_seconds: Optional[int] = None,
+    spam_max_messages: Optional[int] = None,
+    repeat_max_duplicates: Optional[int] = None,
+    mention_limit: Optional[int] = None,
+    caps_ratio_trigger: Optional[float] = None,
+    timeout_minutes: Optional[int] = None,
+):
+    g = bot.gcfg(interaction.guild_id)["automod"]
+    if spam_window_seconds is not None: g["spam_window_seconds"] = max(1, spam_window_seconds)
+    if spam_max_messages is not None:   g["spam_max_messages"] = max(1, spam_max_messages)
+    if repeat_max_duplicates is not None: g["repeat_max_duplicates"] = max(2, repeat_max_duplicates)
+    if mention_limit is not None:       g["mention_limit"] = max(1, mention_limit)
+    if caps_ratio_trigger is not None:  g["caps_ratio_trigger"] = float(min(1.0, max(0.5, caps_ratio_trigger)))
+    if timeout_minutes is not None:     g["timeout_minutes"] = max(0, timeout_minutes)
+    bot.save()
+
+    cur = g.copy()
+    cur["slurs"] = f"{len(g.get('slurs', []))} term(s)"
+    await interaction.response.send_message(
+        "✅ Updated AutoMod thresholds:\n" +
+        "\n".join(f"- **{k}**: {v}" for k, v in cur.items() if k != "enabled" and k != "log_channel_id"),
+        ephemeral=True
+    )
+
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
 bot.tree.add_command(tickets_panels_list)
 bot.tree.add_command(tickets_panel_roles)
 bot.tree.add_command(coach_setup_cmd)
 bot.tree.add_command(coach_panel_cmd)
+bot.tree.add_command(automod_toggle)
+bot.tree.add_command(automod_log)
+bot.tree.add_command(automod_slurs)
+bot.tree.add_command(automod_thresholds)
 # ---------- Run Bot ----------
 def main():
     token = os.getenv("DISCORD_TOKEN")
