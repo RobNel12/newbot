@@ -276,7 +276,13 @@ class TicketControlsView(discord.ui.View):
         else:
             await interaction.channel.send(file=file)
 
-        await interaction.channel.delete()
+
+        # new
+        try:
+            await interaction.channel.delete()
+        except discord.NotFound:
+        # Channel is already deleted; just continue
+            pass
 # ---------- Coach Roster System ----------
 DEFAULT_TEMPLATE = (
 """
@@ -452,11 +458,11 @@ class CoachControlsView(discord.ui.View):
             await interaction.channel.send(file=file)
 
         # new
-    try:
-        await interaction.channel.delete()
-    except discord.NotFound:
-    # Channel is already deleted; just continue
-        pass
+        try:
+            await interaction.channel.delete()
+        except discord.NotFound:
+        # Channel is already deleted; just continue
+            pass
 
 class AutoMod(commands.Cog):
     """Basic slur + spam detection with per-guild config and logging."""
