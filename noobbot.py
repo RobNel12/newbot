@@ -67,6 +67,10 @@ def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
     ar = g.setdefault("autorole", {})
     ar.setdefault("role_id", None)
 
+    # Reaction Roles
+    rr = g.setdefault("reaction_roles", {})
+    rr.setdefault("messages", {})  # { "<message_id>": {"channel_id": int, "single": bool, "map": {emoji_key: role_id}} }
+
     return g
 # ---------- Bot Class ----------
 intents = discord.Intents.default()
