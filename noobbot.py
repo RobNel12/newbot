@@ -817,22 +817,68 @@ async def automod_log(interaction: discord.Interaction, channel: discord.TextCha
     bot.save()
     await interaction.response.send_message(f"✅ AutoMod log set to {channel.mention}.", ephemeral=True)
 
-@app_commands.command(name="automod_slurs", description="Add/remove/list slur terms (substring match, case-insensitive)")
+@app_commands.command(
+    name="automod_slurs",
+    description="Add, remove, or list slur terms (substring match, case-insensitive)."
+)
 @app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(action="Choose add/remove/list", term="The slur term to add or remove")
+@app_commands.choices(action=[
+    app_commands.Choice(name="add", value="add"),
+    app_commands.Choice(name="remove", value="remove"),
+    app_commands.Choice(name="list", value="list"),
+])
 async def automod_slurs(
     interaction: discord.Interaction,
     action: app_commands.Choice[str],
     term: Optional[str] = None
 ):
-    """
-    Use:
-    /automod_slurs action:add term:foo
-    /automod_slurs action:remove term:foo
-    /automod_slurs action:list
-    """
-    # choices for 'action'
-    # (discord.py choices—supply like: choices=[app_commands.Choice(name="add", value="add"), ...])
-    pass
+    # Ensure config exists
+    g = bot.gcfg(interaction.guild_id).setdefault("automod", {})
+    slurs: list[str] = g.setdefault("slurs", [])
+
+    if action.value == "list":
+        # Show all current slurs
+        shown = ", ".join(f"`{s}`" for s in slurs) if slurs else "_(none)_"
+        return await interaction.response.send_message(
+            f"**Current slurs:** {shown}", ephemeral=True
+        )
+
+    if not term:
+        return await interaction.response.send_message(
+            "❌ You must provide a `term` for add/remove.", ephemeral=True
+        )
+
+    t = term.strip()
+    if not t:
+        return await interaction.response.send_message(
+            "❌ Empty term is not allowed.", ephemeral=True
+        )
+
+    if action.value == "add":
+        # Avoid case-insensitive duplicates
+        if t.lower() in (s.lower() for s in slurs):
+            return await interaction.response.send_message(
+                f"⚠️ `{t}` is already in the slur list.", ephemeral=True
+            )
+        slurs.append(t)
+        bot.save()
+        return await interaction.response.send_message(
+            f"✅ Added `{t}` to AutoMod slur list.", ephemeral=True
+        )
+
+    if action.value == "remove":
+        lowered = [s.lower() for s in slurs]
+        if t.lower() not in lowered:
+            return await interaction.response.send_message(
+                f"⚠️ `{t}` is not in the slur list.", ephemeral=True
+            )
+        idx = lowered.index(t.lower())
+        removed = slurs.pop(idx)
+        bot.save()
+        return await interaction.response.send_message(
+            f"✅ Removed `{removed}` from AutoMod slur list.", ephemeral=True
+        )
 
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
