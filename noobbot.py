@@ -891,6 +891,33 @@ async def panel_delete(interaction: discord.Interaction, panel_id: int):
         ephemeral=True
     )
 
+@app_commands.command(name="purge", description="Delete the last N messages, optionally from a specific user.")
+@app_commands.checks.has_permissions(manage_messages=True)
+@app_commands.describe(
+    amount="Number of recent messages to delete (max 100)",
+    user="Only delete messages from this user (optional)"
+)
+async def purge(
+    interaction: discord.Interaction,
+    amount: app_commands.Range[int, 1, 100],
+    user: Optional[discord.User] = None
+):
+    # Confirm command is in a text channel
+    if not isinstance(interaction.channel, discord.TextChannel):
+        return await interaction.response.send_message("❌ This command can only be used in text channels.", ephemeral=True)
+
+    # Let the user know we're working
+    await interaction.response.defer(ephemeral=True)
+
+    def check(m: discord.Message):
+        return (user is None or m.author.id == user.id)
+
+    deleted = await interaction.channel.purge(limit=amount, check=check)
+    await interaction.followup.send(
+        f"✅ Deleted {len(deleted)} message(s){f' from {user.mention}' if user else ''}.",
+        ephemeral=True
+    )
+
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
 bot.tree.add_command(tickets_panels_list)
@@ -902,6 +929,7 @@ bot.tree.add_command(automod_toggle)
 bot.tree.add_command(automod_log)
 bot.tree.add_command(automod_slurs)
 bot.tree.add_command(automod_thresholds)
+bot.tree.add_command(purge)
 # ---------- Run Bot ----------
 def main():
     token = os.getenv("DISCORD_TOKEN")
