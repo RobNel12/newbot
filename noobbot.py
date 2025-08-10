@@ -12,7 +12,7 @@ import os
 import io
 import json
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timezone
 from typing import Optional, Dict, Any
 
 import discord
@@ -79,6 +79,7 @@ class CombinedBot(commands.Bot):
         self.add_view(TicketControlsView(self))
         self.add_view(CoachControlsView(self))
         self.add_view(OpenCoachTicketView(self))
+        await self.add_cog(AutoMod(self))
 
         # Add all saved ticket panels so their buttons keep working after restart
         for gid, gdata in self.store.items():
@@ -451,6 +452,171 @@ class CoachControlsView(discord.ui.View):
             await interaction.channel.send(file=file)
 
         await interaction.channel.delete()
+
+class AutoMod(commands.Cog):
+    """Basic slur + spam detection with per-guild config and logging."""
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        # rolling window of message timestamps per guild->user
+        self._history: dict[int, dict[int, collections.deque[float]]] = {}
+
+    # ---------- helpers ----------
+    def _cfg(self, guild_id: int) -> dict[str, Any]:
+        return self.bot.gcfg(guild_id).setdefault("automod", {})
+
+    def _log_ch(self, guild: discord.Guild, cfg: dict[str, Any]) -> Optional[discord.TextChannel]:
+        ch_id = cfg.get("log_channel_id")
+        return guild.get_channel(ch_id) if ch_id else None
+
+    async def _log(self, message: discord.Message, reason: str, extra: Optional[str] = None):
+        cfg = self._cfg(message.guild.id)
+        ch = self._log_ch(message.guild, cfg)
+        if not ch:
+            return
+        embed = discord.Embed(
+            title="AutoMod action",
+            description=reason,
+            color=discord.Color.red(),
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.add_field(name="Author", value=f"{message.author} ({message.author.id})", inline=False)
+        if message.content:
+            trimmed = message.content if len(message.content) <= 4000 else message.content[:4000] + "…"
+            embed.add_field(name="Content", value=trimmed, inline=False)
+        if message.jump_url:
+            embed.add_field(name="Jump", value=message.jump_url, inline=False)
+        if extra:
+            embed.set_footer(text=extra)
+        await ch.send(embed=embed)
+
+    async def _punish(self, member: discord.Member, minutes: int, reason: str):
+        if minutes <= 0:
+            return
+        until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        try:
+            await member.edit(timed_out_until=until, reason=f"AutoMod: {reason}")
+        except discord.Forbidden:
+            pass
+        except discord.HTTPException:
+            pass
+
+    # ---------- checks ----------
+    def _contains_slur(self, content: str, slurs: list[str]) -> Optional[str]:
+        low = content.lower()
+        for s in slurs:
+            s = s.strip().lower()
+            if not s:
+                continue
+            # substring match is intentional—admins control the list
+            if s in low:
+                return s
+        return None
+
+    def _too_many_mentions(self, message: discord.Message, limit: int) -> bool:
+        total = len(message.mentions) + len(message.role_mentions)
+        if message.mention_everyone:
+            total += 1
+        return total >= max(1, limit)
+
+    def _too_many_caps(self, content: str, ratio_trigger: float) -> bool:
+        letters = [c for c in content if c.isalpha()]
+        if len(letters) < 20:  # ignore small messages
+            return False
+        caps = sum(1 for c in letters if c.isupper())
+        return caps / max(1, len(letters)) >= max(0.5, min(1.0, ratio_trigger))
+
+    def _long_repeats(self, content: str, repeat_threshold: int) -> bool:
+        if repeat_threshold <= 1:
+            return False
+        # detect any character repeating N+ times (e.g., "!!!!!!!!!", "loooooool")
+        return bool(re.search(rf"(.)\1{{{repeat_threshold},}}", content))
+
+    def _rate_limit(self, guild_id: int, user_id: int, window_s: int, max_msgs: int) -> bool:
+        now = discord.utils.utcnow().timestamp()
+        hist_g = self._history.setdefault(guild_id, {})
+        dq = hist_g.setdefault(user_id, collections.deque())
+        dq.append(now)
+        # drop old
+        cutoff = now - max(1, window_s)
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+        return len(dq) > max(1, max_msgs)
+
+    # ---------- events ----------
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if not message.guild or message.author.bot:
+            return
+        if message.author.guild_permissions.manage_messages:
+            return  # staff bypass
+
+        cfg = self._cfg(message.guild.id)
+        if not cfg.get("enabled", True):
+            return
+
+        content = message.content or ""
+        acted = False
+        reason = ""
+
+        # 1) slurs
+        hit = self._contains_slur(content, cfg.get("slurs", []))
+        if hit:
+            reason = f"Slur detected: '{hit}'"
+            acted = True
+
+        # 2) mass mentions
+        if not acted and self._too_many_mentions(message, cfg.get("mention_limit", 6)):
+            reason = "Mass mention / mention spam"
+            acted = True
+
+        # 3) long repeats (e.g., '!!!!!!!!!' or 'loooooool')
+        if not acted and self._long_repeats(content, cfg.get("repeat_max_duplicates", 12)):
+            reason = "Excessive repeated characters"
+            acted = True
+
+        # 4) caps lock rage
+        if not acted and self._too_many_caps(content, cfg.get("caps_ratio_trigger", 0.8)):
+            reason = "Excessive CAPS"
+            acted = True
+
+        # 5) burst spam (messages per short window)
+        if not acted and self._rate_limit(
+            message.guild.id,
+            message.author.id,
+            cfg.get("spam_window_seconds", 6),
+            cfg.get("spam_max_messages", 5),
+        ):
+            reason = "Message rate spam"
+            acted = True
+
+        if acted:
+            try:
+                await message.delete()
+            except discord.Forbidden:
+                pass
+            except discord.HTTPException:
+                pass
+
+            # short public nudge (auto-deletes), no ping storm
+            try:
+                warn = await message.channel.send(
+                    f"{message.author.mention} your message was removed by AutoMod: **{reason}**",
+                    allowed_mentions=discord.AllowedMentions(users=[message.author]),
+                )
+                await warn.delete(delay=8)
+            except Exception:
+                pass
+
+            await self._punish(message.author, int(cfg.get("timeout_minutes", 0)), reason)
+            await self._log(message, reason)
+            return
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        # Recheck edits (users sometimes try to sneak content post-send)
+        if after and after.content != (before.content or ""):
+            await self.on_message(after)
+
 # ---------- Slash Commands ----------
 @app_commands.command(name="setup", description="(Tickets) Set a transcript log channel (optional)")
 @app_commands.checks.has_permissions(manage_guild=True)
