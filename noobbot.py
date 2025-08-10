@@ -451,7 +451,12 @@ class CoachControlsView(discord.ui.View):
         else:
             await interaction.channel.send(file=file)
 
+        # new
+    try:
         await interaction.channel.delete()
+    except discord.NotFound:
+    # Channel is already deleted; just continue
+        pass
 
 class AutoMod(commands.Cog):
     """Basic slur + spam detection with per-guild config and logging."""
