@@ -933,6 +933,24 @@ async def purge(
         ephemeral=True
     )
 
+@app_commands.command(name="autorole", description="Set or clear the role automatically assigned to new members.")
+@app_commands.checks.has_permissions(manage_roles=True)
+@app_commands.describe(role="The role to auto-assign (omit to clear)")
+async def autorole(interaction: discord.Interaction, role: Optional[discord.Role] = None):
+    g = bot.gcfg(interaction.guild_id).setdefault("autorole", {})
+
+    if role:
+        # Check if bot can assign it
+        if role >= interaction.guild.me.top_role:
+            return await interaction.response.send_message("❌ I can't assign that role (it's higher than my top role).", ephemeral=True)
+        g["role_id"] = role.id
+        bot.save()
+        return await interaction.response.send_message(f"✅ AutoRole set to {role.mention}.", ephemeral=True)
+    else:
+        g["role_id"] = None
+        bot.save()
+        return await interaction.response.send_message("✅ AutoRole cleared.", ephemeral=True)
+
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
 bot.tree.add_command(tickets_panels_list)
@@ -945,6 +963,7 @@ bot.tree.add_command(automod_log)
 bot.tree.add_command(automod_slurs)
 bot.tree.add_command(automod_thresholds)
 bot.tree.add_command(purge)
+bot.tree.add_commabd(autorole)
 # ---------- Run Bot ----------
 def main():
     token = os.getenv("DISCORD_TOKEN")
