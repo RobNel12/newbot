@@ -55,13 +55,13 @@ def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
     a = g.setdefault("automod", {})
     a.setdefault("enabled", True)
     a.setdefault("log_channel_id", None)
-    a.setdefault("slurs", [])  # plain strings; matched case-insensitively
+    a.setdefault("slurs", [])
     a.setdefault("spam_window_seconds", 6)
     a.setdefault("spam_max_messages", 5)
-    a.setdefault("repeat_max_duplicates", 12)  # e.g., "looooooool"
-    a.setdefault("mention_limit", 6)           # total of user+role+@everyone
-    a.setdefault("caps_ratio_trigger", 0.8)    # 80%+ caps over >=20 letters
-    a.setdefault("timeout_minutes", 0)         # 0 = no timeout, otherwise apply
+    a.setdefault("repeat_max_duplicates", 12)
+    a.setdefault("mention_limit", 6)
+    a.setdefault("caps_ratio_trigger", 0.8)
+    a.setdefault("timeout_minutes", 0)
     return g
 # ---------- Bot Class ----------
 intents = discord.Intents.default()
