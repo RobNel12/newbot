@@ -868,10 +868,38 @@ async def automod_slurs(
             f"✅ Removed `{removed}` from AutoMod slur list.", ephemeral=True
         )
 
+@app_commands.command(name="panel_delete", description="Delete an existing ticket panel")
+@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.describe(panel_id="The ID number of the panel to delete")
+async def panel_delete(interaction: discord.Interaction, panel_id: int):
+    g = bot.gcfg(interaction.guild_id)["tickets"]
+    panels = g.get("panels", {})
+
+    if str(panel_id) not in panels:
+        return await interaction.response.send_message(
+            f"❌ No ticket panel with ID `{panel_id}` found.",
+            ephemeral=True
+        )
+
+    # Remove from config
+    removed_panel = panels.pop(str(panel_id))
+    bot.save()
+
+    # Remove persistent view (button) if it exists
+    for child in list(bot.persistent_views):
+        if isinstance(child, OpenPanelView) and child.panel_id == panel_id and child.guild_id == interaction.guild_id:
+            bot.remove_view(child)
+
+    await interaction.response.send_message(
+        f"✅ Ticket panel `{panel_id}` deleted.",
+        ephemeral=True
+    )
+
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
 bot.tree.add_command(tickets_panels_list)
 bot.tree.add_command(tickets_panel_roles)
+bot.tree.add_command(panel_delete)
 bot.tree.add_command(coach_setup_cmd)
 bot.tree.add_command(coach_panel_cmd)
 bot.tree.add_command(automod_toggle)
