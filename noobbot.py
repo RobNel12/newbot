@@ -6,12 +6,13 @@
 #
 # NOTE: Enable "Message Content Intent" in the Discord Developer Portal for transcripts and reading coach submissions.
 
-import collections
 import re
 import os
 import io
 import json
 import asyncio
+import aiohttp
+import collections
 from datetime import datetime, timezone, timezone
 from typing import Optional, Dict, Any
 
