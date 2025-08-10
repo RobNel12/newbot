@@ -1024,12 +1024,12 @@ async def reddit_daily_set(self, interaction: discord.Interaction, subreddit: st
 
     @app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
  @app_commands.checks.has_permissions(manage_guild=True)
-    async def reddit_daily_disable(self, interaction: discord.Interaction):
-        cfg = self._cfg(interaction.guild_id)
-        cfg["subreddit"] = None
-        cfg["channel_id"] = None
-        self.bot.save()
-        await interaction.response.send_message("✅ Reddit daily post disabled.", ephemeral=True)
+async def reddit_daily_disable(self, interaction: discord.Interaction):
+    cfg = self._cfg(interaction.guild_id)
+    cfg["subreddit"] = None
+    cfg["channel_id"] = None
+    self.bot.save()
+    await interaction.response.send_message("✅ Reddit daily post disabled.", ephemeral=True)
 
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
