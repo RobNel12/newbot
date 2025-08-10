@@ -67,9 +67,10 @@ def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
     ar = g.setdefault("autorole", {})
     ar.setdefault("role_id", None)
 
-    # Reaction Roles
-    rr = g.setdefault("reaction_roles", {})
-    rr.setdefault("messages", {})  # { "<message_id>": {"channel_id": int, "single": bool, "map": {emoji_key: role_id}} }
+    # Reddit daily post
+    rd = g.setdefault("reddit_daily", {})
+    rd.setdefault("subreddit", None)       # e.g., "memes"
+    rd.setdefault("channel_id", None)      # Channel to post in
 
     return g
 # ---------- Bot Class ----------
