@@ -1022,7 +1022,7 @@ async def reddit_daily_set(self, interaction: discord.Interaction, subreddit: st
         f"✅ Daily top post from r/{subreddit} will be posted in {channel.mention}.",
         ephemeral=True)
 
-    @app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
+@app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def reddit_daily_disable(self, interaction: discord.Interaction):
     cfg = self._cfg(interaction.guild_id)
