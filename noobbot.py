@@ -117,22 +117,6 @@ def save_all(data: Dict[str, Any]) -> None:
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
-    g = data.setdefault(str(gid), {})
-    # Tickets (per-panel)
-    t = g.setdefault("tickets", {})
-    t.setdefault("log_channel_id", None)
-    t.setdefault("panels", {})
-    t.setdefault("next_panel_id", 1)
-    t.setdefault("next_ticket_seq", 1)
-    # Coach
-    c = g.setdefault("coach", {})
-    c.setdefault("category_id", None)
-    c.setdefault("roster_channel_id", None)
-    c.setdefault("log_channel_id", None)
-    c.setdefault("next_entry_id", 1)
-    c.setdefault("template_text", None)
-    return g
 
 bot = CombinedBot()
 # ---------- Ticket Panel System ----------
