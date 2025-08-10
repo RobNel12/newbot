@@ -15,6 +15,7 @@ import aiohttp
 import collections
 from datetime import datetime, timezone, timezone
 from typing import Optional, Dict, Any
+from discord import app_commands, Interaction
 
 import discord
 from discord import app_commands
