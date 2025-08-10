@@ -817,6 +817,39 @@ async def automod_thresholds(
         ephemeral=True
     )
 
+@app_commands.command(name="automod", description="Enable or disable AutoMod")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def automod_toggle(interaction: discord.Interaction, enabled: bool):
+    g = bot.gcfg(interaction.guild_id)["automod"]
+    g["enabled"] = enabled
+    bot.save()
+    await interaction.response.send_message(f"✅ AutoMod {'enabled' if enabled else 'disabled'}.", ephemeral=True)
+
+@app_commands.command(name="automod_log", description="Set the AutoMod log channel")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def automod_log(interaction: discord.Interaction, channel: discord.TextChannel):
+    g = bot.gcfg(interaction.guild_id)["automod"]
+    g["log_channel_id"] = channel.id
+    bot.save()
+    await interaction.response.send_message(f"✅ AutoMod log set to {channel.mention}.", ephemeral=True)
+
+@app_commands.command(name="automod_slurs", description="Add/remove/list slur terms (substring match, case-insensitive)")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def automod_slurs(
+    interaction: discord.Interaction,
+    action: app_commands.Choice[str],
+    term: Optional[str] = None
+):
+    """
+    Use:
+    /automod_slurs action:add term:foo
+    /automod_slurs action:remove term:foo
+    /automod_slurs action:list
+    """
+    # choices for 'action'
+    # (discord.py choices—supply like: choices=[app_commands.Choice(name="add", value="add"), ...])
+    pass
+
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
 bot.tree.add_command(tickets_panels_list)
