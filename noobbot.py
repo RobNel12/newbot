@@ -100,7 +100,7 @@ class CombinedBot(commands.Bot):
             await self.tree.sync(guild=guild)
         else:
             await self.tree.sync()
-    @bot.event
+
     async def on_member_join(member: discord.Member):
         g = bot.gcfg(member.guild.id).setdefault("autorole", {})
         role_id = g.get("role_id")
