@@ -1012,7 +1012,7 @@ async def autorole(interaction: discord.Interaction, role: Optional[discord.Role
         return await interaction.response.send_message("✅ AutoRole cleared.", ephemeral=True)
 
 @app_commands.command(name="reddit_daily_set", description="Set the subreddit and channel for daily top post")
- @app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
 async def reddit_daily_set(self, interaction: discord.Interaction, subreddit: str, channel: discord.TextChannel):
     cfg = self._cfg(interaction.guild_id)
     cfg["subreddit"] = subreddit
@@ -1023,7 +1023,7 @@ async def reddit_daily_set(self, interaction: discord.Interaction, subreddit: st
         ephemeral=True)
 
     @app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
- @app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.checks.has_permissions(manage_guild=True)
 async def reddit_daily_disable(self, interaction: discord.Interaction):
     cfg = self._cfg(interaction.guild_id)
     cfg["subreddit"] = None
