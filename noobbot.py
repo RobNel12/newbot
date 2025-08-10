@@ -885,13 +885,9 @@ async def panel_delete(interaction: discord.Interaction, panel_id: int):
     removed_panel = panels.pop(str(panel_id))
     bot.save()
 
-    # Remove persistent view (button) if it exists
-    for child in list(bot.persistent_views):
-        if isinstance(child, OpenPanelView) and child.panel_id == panel_id and child.guild_id == interaction.guild_id:
-            bot.remove_view(child)
-
     await interaction.response.send_message(
-        f"✅ Ticket panel `{panel_id}` deleted.",
+        f"✅ Ticket panel `{panel_id}` deleted. "
+        f"Any existing buttons for it will stop working after the next bot restart.",
         ephemeral=True
     )
 
