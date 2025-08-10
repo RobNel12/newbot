@@ -6,6 +6,7 @@
 #
 # NOTE: Enable "Message Content Intent" in the Discord Developer Portal for transcripts and reading coach submissions.
 
+import collections
 import re
 import os
 import io
