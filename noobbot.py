@@ -100,6 +100,17 @@ class CombinedBot(commands.Bot):
             await self.tree.sync(guild=guild)
         else:
             await self.tree.sync()
+    @bot.event
+    async def on_member_join(member: discord.Member):
+        g = bot.gcfg(member.guild.id).setdefault("autorole", {})
+        role_id = g.get("role_id")
+        if role_id:
+            role = member.guild.get_role(role_id)
+            if role:
+                try:
+                    await member.add_roles(role, reason="AutoRole assignment")
+                except discord.Forbidden:
+                    print(f"[AutoRole] Missing permissions to assign role in {member.guild.name}")
     # --- ADD THESE TWO METHODS ---
     def gcfg(self, gid: int) -> Dict[str, Any]:
         """Return (and initialize if needed) the per-guild config dict."""
@@ -121,7 +132,6 @@ def save_all(data: Dict[str, Any]) -> None:
     import json
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
-
 
 bot = CombinedBot()
 # ---------- Ticket Panel System ----------
