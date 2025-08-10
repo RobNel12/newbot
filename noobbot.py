@@ -284,10 +284,11 @@ Past Ranked or Competitive Experience (if applicable):
 Specialties (check all that apply):
     [] Duels
     [] Teamfights (3v3 / 5v5)
-    [] Frontline / Objective Play
-    [] Loadout Optimization
-    [] Movement & Positioning
+    [] Footwork / Mitigation
     [] Reading Opponents
+    [] Swing Manipulation
+    [] Offense
+    [] Defense
     [] Other: 
     
 Coaching Style (check all that apply):
@@ -295,7 +296,6 @@ Coaching Style (check all that apply):
     [] Recorded Gameplay Analysis
     [] Live Match Commentary
     [] Other: 
-    
     
 Session Length & Structure:
 (Example: “Typically 1-hour sessions with warmup, targeted drills, and live practice.”)
