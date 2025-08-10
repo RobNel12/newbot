@@ -62,6 +62,11 @@ def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
     a.setdefault("mention_limit", 6)
     a.setdefault("caps_ratio_trigger", 0.8)
     a.setdefault("timeout_minutes", 0)
+
+    # AutoRole
+    ar = g.setdefault("autorole", {})
+    ar.setdefault("role_id", None)
+
     return g
 # ---------- Bot Class ----------
 intents = discord.Intents.default()
