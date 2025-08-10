@@ -91,6 +91,7 @@ class CombinedBot(commands.Bot):
         self.add_view(CoachControlsView(self))
         self.add_view(OpenCoachTicketView(self))
         await self.add_cog(AutoMod(self))
+        await self.add_cog(RedditDaily(self))
 
         # Add all saved ticket panels so their buttons keep working after restart
         for gid, gdata in self.store.items():
