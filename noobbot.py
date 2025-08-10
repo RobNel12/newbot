@@ -963,7 +963,7 @@ bot.tree.add_command(automod_log)
 bot.tree.add_command(automod_slurs)
 bot.tree.add_command(automod_thresholds)
 bot.tree.add_command(purge)
-bot.tree.add_commabd(autorole)
+bot.tree.add_command(autorole)
 # ---------- Run Bot ----------
 def main():
     token = os.getenv("DISCORD_TOKEN")
