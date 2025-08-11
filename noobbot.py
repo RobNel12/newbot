@@ -71,6 +71,13 @@ def ensure_guild(data: Dict[str, Any], gid: int) -> Dict[str, Any]:
     ar = g.setdefault("autorole", {})
     ar.setdefault("role_id", None)
 
+    # Reddit daily feed
+    rd = g.setdefault("reddit_feed", {})
+    rd.setdefault("subreddit", None)         # e.g., "funny"
+    rd.setdefault("channel_id", None)        # target channel id
+    rd.setdefault("time_hhmm", None)         # "09:00" 24h format, server time
+    rd.setdefault("last_run_ymd", None)      # "YYYY-MM-DD" to avoid double-posting
+
     return g
 # ---------- Bot Class ----------
 intents = discord.Intents.default()
@@ -680,6 +687,204 @@ class RolePanel(commands.Cog):
 async def setup(bot):
     await bot.add_cog(RolePanel(bot))
 
+class RedditFeed(commands.Cog):
+    """Posts top 3 'day' posts from a subreddit every day at a configured time."""
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self._task = self.bot.loop.create_task(self._scheduler())
+
+    # ---- config helpers ----
+    def _cfg(self, gid: int) -> dict:
+        return self.bot.gcfg(gid).setdefault("reddit_feed", {})
+
+    @staticmethod
+    def _parse_hhmm(s: str):
+        try:
+            hh, mm = s.split(":", 1)
+            h, m = int(hh), int(mm)
+            if 0 <= h <= 23 and 0 <= m <= 59:
+                return h, m
+        except Exception:
+            pass
+        return None
+
+    # ---- fetching ----
+    async def _fetch_top3(self, subreddit: str):
+        url = f"https://www.reddit.com/r/{subreddit}/top/.json?t=day&limit=3"
+        headers = {"User-Agent": "DiscordBotRedditDaily/1.0"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=20) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+        posts = []
+        for child in data.get("data", {}).get("children", []):
+            d = child.get("data", {})
+            posts.append({
+                "title": d.get("title"),
+                "permalink": f"https://reddit.com{d.get('permalink','')}",
+                "score": d.get("score", 0),
+                "author": d.get("author"),
+                "url": d.get("url_overridden_by_dest"),
+                "post_hint": d.get("post_hint"),
+                "over_18": d.get("over_18", False),
+            })
+        return posts
+
+    async def _post_for_guild(self, gid: int, cfg: dict):
+        subreddit = cfg.get("subreddit")
+        channel_id = cfg.get("channel_id")
+        if not subreddit or not channel_id:
+            return
+
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            return
+
+        posts = await self._fetch_top3(subreddit)
+        if not posts:
+            try:
+                await channel.send(f"⚠️ Couldn’t fetch r/{subreddit} today.")
+            except Exception:
+                pass
+            return
+
+        # Send top 3
+        for i, p in enumerate(posts, 1):
+            embed = discord.Embed(
+                title=f"#{i} • {p['title']}",
+                url=p["permalink"],
+                color=discord.Color.orange()
+            )
+            footer_bits = [f"👍 {p['score']}"]
+            if p["author"]:
+                footer_bits.append(f"u/{p['author']}")
+            embed.set_footer(text=" | ".join(footer_bits) + f" • r/{subreddit}")
+
+            # Only set image if it looks like an image
+            u = (p["url"] or "").lower()
+            if p.get("post_hint") == "image" or u.endswith((".jpg", ".jpeg", ".png", ".gif")):
+                embed.set_image(url=p["url"])
+
+            try:
+                await channel.send(embed=embed)
+            except discord.Forbidden:
+                break
+
+        # mark run
+        cfg["last_run_ymd"] = datetime.now(timezone.utc).date().isoformat()
+        self.bot.save()
+
+    # ---- scheduler loop ----
+    async def _scheduler(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            now = datetime.now()  # uses server local time (EC2 default unless you changed it)
+            today_str = now.date().isoformat()
+
+            for gid_str, _ in list(self.bot.store.items()):
+                gid = int(gid_str)
+                cfg = self._cfg(gid)
+                hhmm = cfg.get("time_hhmm")
+                if not hhmm:
+                    continue
+                parsed = self._parse_hhmm(hhmm)
+                if not parsed:
+                    continue
+                h, m = parsed
+
+                # Has it already posted today?
+                if cfg.get("last_run_ymd") == today_str:
+                    continue
+
+                # Fire when local time has passed the target hh:mm
+                if now.hour > h or (now.hour == h and now.minute >= m):
+                    try:
+                        await self._post_for_guild(gid, cfg)
+                    except Exception:
+                        # swallow per-guild errors to keep loop alive
+                        pass
+
+            # wake up roughly every 30 seconds
+            await asyncio.sleep(30)
+
+    # ---- commands ----
+    @app_commands.command(
+        name="redditfeed_set",
+        description="Configure daily Reddit feed: subreddit, channel, and post time (HH:MM 24h, server time)."
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def redditfeed_set(
+        self,
+        interaction: Interaction,
+        subreddit: str,
+        channel: discord.TextChannel,
+        time_hhmm: str
+    ):
+        parsed = self._parse_hhmm(time_hhmm)
+        if not parsed:
+            return await interaction.response.send_message(
+                "❌ Time must be in 24h `HH:MM` format, e.g., `09:00` or `21:30`.",
+                ephemeral=True
+            )
+
+        cfg = self._cfg(interaction.guild_id)
+        cfg["subreddit"] = subreddit
+        cfg["channel_id"] = channel.id
+        cfg["time_hhmm"] = time_hhmm
+        self.bot.save()
+
+        await interaction.response.send_message(
+            f"✅ Daily r/{subreddit} top-3 will post in {channel.mention} at **{time_hhmm}** (server time).",
+            ephemeral=True
+        )
+
+    @app_commands.command(
+        name="redditfeed_disable",
+        description="Disable the daily Reddit feed for this server."
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def redditfeed_disable(self, interaction: Interaction):
+        cfg = self._cfg(interaction.guild_id)
+        cfg["subreddit"] = None
+        cfg["channel_id"] = None
+        cfg["time_hhmm"] = None
+        cfg["last_run_ymd"] = None
+        self.bot.save()
+        await interaction.response.send_message("✅ Reddit daily feed disabled.", ephemeral=True)
+
+    @app_commands.command(
+        name="redditfeed_show",
+        description="Show current Reddit feed settings."
+    )
+    async def redditfeed_show(self, interaction: Interaction):
+        cfg = self._cfg(interaction.guild_id)
+        if not cfg.get("subreddit") or not cfg.get("channel_id") or not cfg.get("time_hhmm"):
+            return await interaction.response.send_message("ℹ️ Not configured.", ephemeral=True)
+        ch = interaction.guild.get_channel(cfg["channel_id"])
+        await interaction.response.send_message(
+            f"**Subreddit:** r/{cfg['subreddit']}\n"
+            f"**Channel:** {ch.mention if ch else f'`{cfg['channel_id']}` (missing)'}\n"
+            f"**Time:** {cfg['time_hhmm']} (server time)",
+            ephemeral=True
+        )
+
+    @app_commands.command(
+        name="redditfeed_test",
+        description="Post the top-3 from the configured subreddit right now (admins only)."
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def redditfeed_test(self, interaction: Interaction):
+        cfg = self._cfg(interaction.guild_id)
+        if not cfg.get("subreddit") or not cfg.get("channel_id"):
+            return await interaction.response.send_message(
+                "❌ Configure first with `/redditfeed_set`.",
+                ephemeral=True
+            )
+        await interaction.response.defer(ephemeral=True)
+        await self._post_for_guild(interaction.guild_id, cfg)
+        await interaction.followup.send("✅ Posted test top-3.", ephemeral=True)
+
 # ---------- Slash Commands ----------
 @app_commands.command(name="setup", description="(Tickets) Set a transcript log channel (optional)")
 @app_commands.checks.has_permissions(manage_guild=True)
@@ -1015,7 +1220,6 @@ async def autorole(interaction: discord.Interaction, role: Optional[discord.Role
         g["role_id"] = None
         bot.save()
         return await interaction.response.send_message("✅ AutoRole cleared.", ephemeral=True)
-
 
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
