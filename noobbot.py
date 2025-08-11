@@ -16,9 +16,12 @@ import collections
 import discord
 import asyncpraw
 from discord.ext import commands, tasks
-from datetime import datetime, timezone, timezone, time as dt_time
+from datetime import datetime, timezone, timezone, time as dt_time, timedelta, time
 from typing import Optional, Dict, Any
 from discord import app_commands, Interaction
+from zoneinfo import ZoneInfo
+import praw
+import asyncio
 
 CONFIG_PATH = "combined_config.json"
 
@@ -685,87 +688,75 @@ class RolePanel(commands.Cog):
 async def setup(bot):
     await bot.add_cog(RolePanel(bot))
 
-class RedditFeed(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
-        self.feeds = {}  # {guild_id: {"subreddit": str, "channel_id": int, "time_hhmm": "HH:MM"}}
-        self.check_feeds.start()
 
-        # Configure Reddit API (replace with your creds)
-        self.reddit = asyncpraw.Reddit(
-            client_id="YOUR_CLIENT_ID",
-            client_secret="YOUR_CLIENT_SECRET",
-            user_agent="DiscordBot by /u/YOUR_USERNAME"
+class RedditFeed(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.feeds = bot.gcfg(0).setdefault("redditfeeds", {})  # global config for now
+        self.post_daily_reddit.start()
+
+        # PRAW client
+        self.reddit = praw.Reddit(
+            client_id=os.getenv("REDDIT_CLIENT_ID"),
+            client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+            user_agent="DiscordBot by u/YourUsername"
         )
 
     def cog_unload(self):
-        self.check_feeds.cancel()
+        self.post_daily_reddit.cancel()
 
-    @tasks.loop(minutes=1)
-    async def check_feeds(self):
-        now = datetime.now().strftime("%H:%M")
-        for guild_id, cfg in self.feeds.items():
-            if cfg["time_hhmm"] == now:
-                guild = self.bot.get_guild(guild_id)
-                if guild:
-                    channel = guild.get_channel(cfg["channel_id"])
-                    if channel:
-                        await self.post_top_posts(cfg["subreddit"], channel)
-
-    async def post_top_posts(self, subreddit_name, channel):
-        try:
-            subreddit = await self.reddit.subreddit(subreddit_name)
-            posts = []
-            async for submission in subreddit.top(time_filter="day", limit=3):
-                posts.append(f"**{submission.title}**\n{submission.url}")
-            if posts:
-                await channel.send(f"**Top posts from r/{subreddit_name} today:**\n\n" + "\n\n".join(posts))
-            else:
-                await channel.send(f"No top posts found for r/{subreddit_name} today.")
-        except Exception as e:
-            await channel.send(f"Error fetching posts: {e}")
-
-    @app_commands.command(name="redditfeed_set", description="Set up the daily Reddit feed.")
+    @app_commands.command(name="redditfeed_set", description="Set subreddit, channel, time, and timezone for daily top post")
     @app_commands.checks.has_permissions(manage_guild=True)
-    async def redditfeed_set(self, interaction: Interaction, subreddit: str, channel: discord.TextChannel, time_hhmm: str):
-        """Set subreddit, channel, and daily time (HH:MM in 24hr format)."""
+    async def redditfeed_set(self, interaction: discord.Interaction, subreddit: str, channel: discord.TextChannel, time_hhmm: str, timezone_str: str):
+        try:
+            ZoneInfo(timezone_str)  # Validate timezone
+        except Exception:
+            return await interaction.response.send_message("Invalid timezone. Example: `America/Los_Angeles`", ephemeral=True)
+
         self.feeds[interaction.guild_id] = {
             "subreddit": subreddit,
             "channel_id": channel.id,
-            "time_hhmm": time_hhmm
+            "time_hhmm": time_hhmm,
+            "timezone": timezone_str
         }
-        await interaction.response.send_message(
-            f"✅ Reddit feed set for r/{subreddit} in {channel.mention} at {time_hhmm} daily.",
-            ephemeral=True
-        )
+        self.bot.save()
+        await interaction.response.send_message(f"✅ Reddit feed set for r/{subreddit} in {channel.mention} at {time_hhmm} {timezone_str} daily.")
 
-    @app_commands.command(name="redditfeed_show", description="Show the current Reddit feed settings.")
-    async def redditfeed_show(self, interaction: Interaction):
-        cfg = self.feeds.get(interaction.guild_id)
-        if not cfg:
-            return await interaction.response.send_message("No Reddit feed configured.", ephemeral=True)
+    @tasks.loop(minutes=1)
+    async def post_daily_reddit(self):
+        now_utc = datetime.now(ZoneInfo("UTC"))
 
-        ch = interaction.guild.get_channel(cfg["channel_id"])
-        channel_display = ch.mention if ch else f"`{cfg['channel_id']}` (missing)"
+        for guild_id, cfg in self.feeds.items():
+            tz = ZoneInfo(cfg["timezone"])
+            target_hour, target_minute = map(int, cfg["time_hhmm"].split(":"))
 
-        await interaction.response.send_message(
-            f"**Subreddit:** r/{cfg['subreddit']}\n"
-            f"**Channel:** {channel_display}\n"
-            f"**Time:** {cfg['time_hhmm']} (server time)",
-            ephemeral=True
-        )
+            now_local = now_utc.astimezone(tz)
+            if now_local.hour == target_hour and now_local.minute == target_minute:
+                await self.post_top_reddit(guild_id, cfg)
 
-    @app_commands.command(name="redditfeed_disable", description="Disable the Reddit feed.")
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def redditfeed_disable(self, interaction: Interaction):
-        if interaction.guild_id in self.feeds:
-            del self.feeds[interaction.guild_id]
-            await interaction.response.send_message("❌ Reddit feed disabled.", ephemeral=True)
-        else:
-            await interaction.response.send_message("No Reddit feed is set.", ephemeral=True)
+    async def post_top_reddit(self, guild_id, cfg):
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
 
+        channel = guild.get_channel(cfg["channel_id"])
+        if not channel:
+            return
 
-async def setup(bot: commands.Bot):
+        subreddit = self.reddit.subreddit(cfg["subreddit"])
+        posts = list(subreddit.top(time_filter="day", limit=3))
+        if not posts:
+            return
+
+        for post in posts:
+            embed = discord.Embed(title=post.title, url=f"https://reddit.com{post.permalink}", color=discord.Color.orange())
+            if post.selftext:
+                embed.description = (post.selftext[:500] + "...") if len(post.selftext) > 500 else post.selftext
+            if hasattr(post, "url") and post.url.endswith((".jpg", ".png", ".gif")):
+                embed.set_image(url=post.url)
+            await channel.send(embed=embed)
+
+async def setup(bot):
     await bot.add_cog(RedditFeed(bot))
 
 
