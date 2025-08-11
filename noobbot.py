@@ -736,7 +736,7 @@ class RedditFeed(commands.Cog):
 
         ch = interaction.guild.get_channel(cfg["channel_id"])
         channel_display = ch.mention if ch else f"`{cfg['channel_id']}` (missing)"
-await interaction.response.send_message(
+    await interaction.response.send_message(
         f"**Subreddit:** r/{cfg['subreddit']}\n"
         f"**Channel:** {channel_display}\n"
         f"**Time:** {cfg['time_hhmm']} (server time)",
