@@ -744,17 +744,17 @@ await interaction.response.send_message(
         )
 
 @tasks.loop(minutes=1)
-    async def daily_reddit_task(self):
-        now = datetime.datetime.now().strftime("%H:%M")
-        for guild_id, cfg in self.feeds.items():
-            if cfg["time_hhmm"] == now:
-                guild = self.bot.get_guild(guild_id)
-                if not guild:
-                    continue
-                channel = guild.get_channel(cfg["channel_id"])
-                if not channel:
-                    continue
-                await self.post_top_posts(channel, cfg["subreddit"])
+async def daily_reddit_task(self):
+    now = datetime.datetime.now().strftime("%H:%M")
+    for guild_id, cfg in self.feeds.items():
+        if cfg["time_hhmm"] == now:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                continue
+            channel = guild.get_channel(cfg["channel_id"])
+            if not channel:
+                continue
+            await self.post_top_posts(channel, cfg["subreddit"])
 
     async def post_top_posts(self, channel: discord.TextChannel, subreddit: str):
         url = f"https://www.reddit.com/r/{subreddit}/top/.json?t=day&limit=3"
