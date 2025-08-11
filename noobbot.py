@@ -1020,7 +1020,7 @@ async def reddit_daily_set(
     interaction: Interaction,
     subreddit: str,
     channel: discord.TextChannel
-):
+)
 
 @app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
 @app_commands.checks.has_permissions(manage_guild=True)
