@@ -118,10 +118,7 @@ class CombinedBot(commands.Bot):
                     self.tree.copy_global_to(guild=guild)
                     await self.tree.sync(guild=guild)
                     print(f"✅ Synced commands to guild {gid}")
-        else:
-            await self.tree.sync()
-            print("🌍 Synced commands globally")
-
+        
     async def on_member_join(member: discord.Member):
         g = bot.gcfg(member.guild.id).setdefault("autorole", {})
         role_id = g.get("role_id")
