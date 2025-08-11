@@ -623,59 +623,6 @@ class AutoMod(commands.Cog):
         if after and after.content != (before.content or ""):
             await self.on_message(after)
 
-class RedditDaily(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.task = self.bot.loop.create_task(self.daily_poster())
-
-    def _cfg(self, guild_id: int) -> dict:
-        return self.bot.gcfg(guild_id).setdefault("reddit_daily", {})
-
-    async def fetch_top_post(self, subreddit: str):
-        url = f"https://www.reddit.com/r/{subreddit}/top/.json?t=day&limit=1"
-        headers = {"User-Agent": "DiscordBot/1.0"}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-                try:
-                    post = data["data"]["children"][0]["data"]
-                    return {
-                        "title": post["title"],
-                        "url": f"https://reddit.com{post['permalink']}",
-                        "image": post.get("url_overridden_by_dest"),
-                        "score": post["score"],
-                        "author": post["author"],
-                    }
-                except (KeyError, IndexError):
-                    return None
-
-    async def daily_poster(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            for gid, gdata in list(self.bot.store.items()):
-                cfg = gdata.get("reddit_daily", {})
-                subreddit = cfg.get("subreddit")
-                channel_id = cfg.get("channel_id")
-                if subreddit and channel_id:
-                    channel = self.bot.get_channel(channel_id)
-                    if channel:
-                        post = await self.fetch_top_post(subreddit)
-                        if post:
-                            embed = discord.Embed(
-                                title=post["title"],
-                                url=post["url"],
-                                color=discord.Color.orange()
-                            )
-                            embed.set_footer(text=f"👍 {post['score']} | Posted by u/{post['author']}")
-                            if post["image"] and post["image"].endswith((".jpg", ".png", ".gif")):
-                                embed.set_image(url=post["image"])
-                            try:
-                                await channel.send(embed=embed)
-                            except discord.Forbidden:
-                                pass
-            await asyncio.sleep(86400)  # 24 hours
 
 # ---------- Slash Commands ----------
 @app_commands.command(name="setup", description="(Tickets) Set a transcript log channel (optional)")
@@ -1013,26 +960,6 @@ async def autorole(interaction: discord.Interaction, role: Optional[discord.Role
         bot.save()
         return await interaction.response.send_message("✅ AutoRole cleared.", ephemeral=True)
 
-@app_commands.command(name="reddit_daily_set", description="Set the subreddit and channel for daily top post")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def reddit_daily_set(self, interaction: Interaction, subreddit: str, channel: discord.TextChannel):
-    cfg = self._cfg(interaction.guild_id)
-    cfg["subreddit"] = subreddit
-    cfg["channel_id"] = channel.id
-    self.bot.save()
-    await interaction.response.send_message(
-        f"✅ Daily top post from r/{subreddit} will be posted in {channel.mention}.",
-        ephemeral=True
-    )
-
-@app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def reddit_daily_disable(self, interaction: Interaction):
-    cfg = self._cfg(interaction.guild_id)
-    cfg["subreddit"] = None
-    cfg["channel_id"] = None
-    self.bot.save()
-    await interaction.response.send_message("✅ Reddit daily post disabled.", ephemeral=True)
 
 bot.tree.add_command(tickets_setup)
 bot.tree.add_command(tickets_panel)
@@ -1047,8 +974,7 @@ bot.tree.add_command(automod_slurs)
 bot.tree.add_command(automod_thresholds)
 bot.tree.add_command(purge)
 bot.tree.add_command(autorole)
-bot.tree.add_command(reddit_daily_set)
-bot.tree.add_command(reddit_daily_disable)
+
 # ---------- Run Bot ----------
 def main():
     token = os.getenv("DISCORD_TOKEN")
