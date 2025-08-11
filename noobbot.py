@@ -1015,7 +1015,7 @@ async def autorole(interaction: discord.Interaction, role: Optional[discord.Role
 
 @app_commands.command(name="reddit_daily_set", description="Set the subreddit and channel for daily top post")
 @app_commands.checks.has_permissions(manage_guild=True)
-async def reddit_daily_set(self, interaction, subreddit: str, channel: discord.TextChannel):
+async def reddit_daily_set(self, interaction: Interaction, subreddit: str, channel: discord.TextChannel):
     cfg = self._cfg(interaction.guild_id)
     cfg["subreddit"] = subreddit
     cfg["channel_id"] = channel.id
@@ -1027,7 +1027,7 @@ async def reddit_daily_set(self, interaction, subreddit: str, channel: discord.T
 
 @app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
 @app_commands.checks.has_permissions(manage_guild=True)
-async def reddit_daily_disable(self, interaction):
+async def reddit_daily_disable(self, interaction: Interaction):
     cfg = self._cfg(interaction.guild_id)
     cfg["subreddit"] = None
     cfg["channel_id"] = None
