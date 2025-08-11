@@ -756,18 +756,26 @@ class RedditFeed(commands.Cog):
                         await channel.send(f"**{post['title']}**\n{post['url']}")
 
     # ---------- COMMANDS ----------
-    @commands.command(name="redditfeed_set")
-    @commands.has_permissions(manage_guild=True)
-    async def redditfeed_set(self, ctx, subreddit: str, channel: discord.TextChannel, time_str: str, tz_str: str):
-        """Set subreddit, channel, HH:MM time (24h), and timezone (e.g. Europe/London)."""
-        self.feeds[str(ctx.guild.id)] = {
+    @app_commands.command(name="redditfeed_set", description="Set up the daily reddit feed.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def redditfeed_set(self, interaction: discord.Interaction, subreddit: str, channel: discord.TextChannel, time_hhmm: str, timezone: str):
+        """Example: /redditfeed_set funny #general 14:30 UTC"""
+        self.feeds[interaction.guild_id] = {
             "subreddit": subreddit,
             "channel_id": channel.id,
-            "time": time_str,
-            "tz": tz_str
+            "time_hhmm": time_hhmm,
+            "tz": timezone
         }
-        self.save_config()
-        await ctx.send(f"✅ Reddit feed set for r/{subreddit} → {channel.mention} at {time_str} {tz_str}")
+        await interaction.response.send_message(f"✅ Daily Reddit feed set for r/{subreddit} at {time_hhmm} {timezone} in {channel.mention}", ephemeral=True)
+
+    @app_commands.command(name="redditfeed_disable", description="Disable the daily reddit feed.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def redditfeed_disable(self, interaction: discord.Interaction):
+        if interaction.guild_id in self.feeds:
+            del self.feeds[interaction.guild_id]
+            await interaction.response.send_message("❌ Reddit feed disabled.", ephemeral=True)
+        else:
+            await interaction.response.send_message("No Reddit feed is set.", ephemeral=True)
 
     @app_commands.command(name="redditfeed_show", description="Show the current reddit feed settings.")
     async def redditfeed_show(self, interaction: discord.Interaction):
@@ -781,20 +789,9 @@ class RedditFeed(commands.Cog):
         await interaction.response.send_message(
             f"**Subreddit:** r/{cfg['subreddit']}\n"
             f"**Channel:** {channel_display}\n"
-            f"**Time:** {cfg['time_hhmm']} (server time)",
+            f"**Time:** {cfg['time_hhmm']} ({cfg['tz']})",
             ephemeral=True
         )
-
-    @commands.command(name="redditfeed_disable")
-    @commands.has_permissions(manage_guild=True)
-    async def redditfeed_disable(self, ctx):
-        """Disable the daily Reddit feed."""
-        if str(ctx.guild.id) in self.feeds:
-            del self.feeds[str(ctx.guild.id)]
-            self.save_config()
-            await ctx.send("🚫 Reddit feed disabled.")
-        else:
-            await ctx.send("No Reddit feed was configured.")
 
 async def setup(bot):
     await bot.add_cog(RedditFeed(bot))
