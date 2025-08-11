@@ -735,12 +735,13 @@ class RedditFeed(commands.Cog):
             return await interaction.response.send_message("No Reddit feed configured.", ephemeral=True)
 
         ch = interaction.guild.get_channel(cfg["channel_id"])
-        await interaction.response.send_message(
-            f"**Subreddit:** r/{cfg['subreddit']}\n"
-            f"**Channel:** {(ch.mention if ch else f'`{cfg[\"channel_id\"]}` (missing)')}\n"
-            f"**Time:** {cfg['time_hhmm']} (server time)",
-            ephemeral=True
-        )
+        channel_display = ch.mention if ch else f"`{cfg['channel_id']}` (missing)"
+await interaction.response.send_message(
+        f"**Subreddit:** r/{cfg['subreddit']}\n"
+        f"**Channel:** {channel_display}\n"
+        f"**Time:** {cfg['time_hhmm']} (server time)",
+        ephemeral=True
+)
 
     @tasks.loop(minutes=1)
     async def daily_reddit_task(self):
