@@ -769,17 +769,20 @@ class RedditFeed(commands.Cog):
         self.save_config()
         await ctx.send(f"✅ Reddit feed set for r/{subreddit} → {channel.mention} at {time_str} {tz_str}")
 
-    @commands.command(name="redditfeed_show")
-    async def redditfeed_show(self, ctx):
-        """Show current feed settings."""
-        cfg = self.feeds.get(str(ctx.guild.id))
+    @app_commands.command(name="redditfeed_show", description="Show the current reddit feed settings.")
+    async def redditfeed_show(self, interaction: discord.Interaction):
+        cfg = self.feeds.get(interaction.guild_id)
         if not cfg:
-            return await ctx.send("❌ No Reddit feed configured.")
-        ch = ctx.guild.get_channel(cfg["channel_id"])
-        await ctx.send(
+            return await interaction.response.send_message("No Reddit feed configured.", ephemeral=True)
+
+        ch = interaction.guild.get_channel(cfg["channel_id"])
+        channel_display = ch.mention if ch else f"`{cfg['channel_id']}` (missing)"
+
+        await interaction.response.send_message(
             f"**Subreddit:** r/{cfg['subreddit']}\n"
-            f"**Channel:** {(ch.mention if ch else f'`{cfg[\"channel_id\"]}` (missing)')}\n"
-            f"**Time:** {cfg['time']} ({cfg['tz']})"
+            f"**Channel:** {channel_display}\n"
+            f"**Time:** {cfg['time_hhmm']} (server time)",
+            ephemeral=True
         )
 
     @commands.command(name="redditfeed_disable")
