@@ -719,6 +719,7 @@ class RedditFeed(commands.Cog):
         )
 
     @app_commands.command(name="redditfeed_disable", description="Disable the daily reddit feed.")
+
     @app_commands.checks.has_permissions(manage_guild=True)
     async def redditfeed_disable(self, interaction: discord.Interaction):
         if interaction.guild_id in self.feeds:
@@ -727,7 +728,7 @@ class RedditFeed(commands.Cog):
         else:
             await interaction.response.send_message("No feed is currently set.", ephemeral=True)
 
-   @app_commands.command(name="redditfeed_show", description="Show the current reddit feed settings.")
+    @app_commands.command(name="redditfeed_show", description="Show the current reddit feed settings.")
     async def redditfeed_show(self, interaction: discord.Interaction):
         cfg = self.feeds.get(interaction.guild_id)
         if not cfg:
