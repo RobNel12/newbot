@@ -23,6 +23,9 @@ from zoneinfo import ZoneInfo
 import praw
 import asyncio
 
+from dotenv import load_dotenv
+load_dotenv()
+
 CONFIG_PATH = "combined_config.json"
 
 # ---------- Persistent Config Helpers ----------
