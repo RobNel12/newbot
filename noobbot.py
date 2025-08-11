@@ -694,14 +694,13 @@ class RedditFeed(commands.Cog):
         self.bot = bot
         self.feeds = bot.gcfg(0).setdefault("redditfeeds", {})  # global config for now
         self.post_daily_reddit.start()
-        self.reddit = praw.Reddit("default")
 
         # PRAW client
         self.reddit = praw.Reddit(
             client_id=os.getenv("REDDIT_CLIENT_ID"),
-            client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-            user_agent="DiscordBot by u/YourUsername"
-        )
+        client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
+        user_agent="NewbBot by u/ch3zzx"
+)
 
     def cog_unload(self):
         self.post_daily_reddit.cancel()
