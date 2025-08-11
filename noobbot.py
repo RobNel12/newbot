@@ -89,6 +89,7 @@ class CombinedBot(commands.Bot):
         self.add_view(CoachControlsView(self))
         self.add_view(OpenCoachTicketView(self))
         await self.add_cog(AutoMod(self))
+        await self.add_cog(RolePanel(self))
         
         # Add all saved ticket panels so their buttons keep working after restart
         for gid, gdata in self.store.items():
@@ -619,6 +620,65 @@ class AutoMod(commands.Cog):
         if after and after.content != (before.content or ""):
             await self.on_message(after)
 
+class RoleButton(discord.ui.View):
+    def __init__(self, role_id: int, *, timeout=None, allow_toggle=True):
+        super().__init__(timeout=timeout)
+        self.role_id = role_id
+        self.allow_toggle = allow_toggle
+
+    @discord.ui.button(label="Get Role", style=discord.ButtonStyle.primary, custom_id="role_button")
+    async def get_role(self, interaction: discord.Interaction, button: discord.ui.Button):
+        role = interaction.guild.get_role(self.role_id)
+        if not role:
+            return await interaction.response.send_message("⚠️ Role not found!", ephemeral=True)
+
+        if role in interaction.user.roles:
+            if self.allow_toggle:
+                await interaction.user.remove_roles(role)
+                await interaction.response.send_message(f"❌ Removed {role.mention} from you.", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"✅ You already have {role.mention}.", ephemeral=True)
+        else:
+            await interaction.user.add_roles(role)
+            await interaction.response.send_message(f"✅ You now have {role.mention}.", ephemeral=True)
+
+
+class RolePanel(commands.Cog):
+    def __init__(self, bot: CombinedBot):
+        self.bot = bot
+
+    @app_commands.command(name="role_panel", description="Create a button panel to give/take a role.")
+    @app_commands.checks.has_permissions(manage_roles=True)
+    @app_commands.describe(
+        role="The role to give",
+        channel="Channel to post the panel in",
+        allow_toggle="Allow removing role by clicking again"
+    )
+    async def role_panel(
+        self,
+        interaction: discord.Interaction,
+        role: discord.Role,
+        channel: discord.TextChannel,
+        allow_toggle: bool = True
+    ):
+        if role >= interaction.guild.me.top_role:
+            return await interaction.response.send_message(
+                "⚠️ I can't give that role because it's higher than my highest role.",
+                ephemeral=True
+            )
+
+        view = RoleButton(role.id, allow_toggle=allow_toggle)
+        embed = discord.Embed(
+            title="Role Panel",
+            description=f"Click the button below to get the {role.mention} role.",
+            color=discord.Color.blurple()
+        )
+        await channel.send(embed=embed, view=view)
+        await interaction.response.send_message(f"✅ Role panel created in {channel.mention}", ephemeral=True)
+
+
+async def setup(bot):
+    await bot.add_cog(RolePanel(bot))
 
 # ---------- Slash Commands ----------
 @app_commands.command(name="setup", description="(Tickets) Set a transcript log channel (optional)")
