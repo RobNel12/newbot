@@ -1026,7 +1026,6 @@ bot.tree.add_command(automod_slurs)
 bot.tree.add_command(automod_thresholds)
 bot.tree.add_command(purge)
 bot.tree.add_command(autorole)
-bot.tree.add_command(role_panel)
 
 # ---------- Run Bot ----------
 def main():
