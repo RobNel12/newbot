@@ -778,7 +778,7 @@ class RedditFeed(commands.Cog):
         ch = ctx.guild.get_channel(cfg["channel_id"])
         await ctx.send(
             f"**Subreddit:** r/{cfg['subreddit']}\n"
-            f"**Channel:** {(ch.mention if ch else f'`{cfg['channel_id']}` (missing)')}\n"
+            f"**Channel:** {(ch.mention if ch else f'`{cfg[\"channel_id\"]}` (missing)')}\n"
             f"**Time:** {cfg['time']} ({cfg['tz']})"
         )
 
