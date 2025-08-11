@@ -756,8 +756,6 @@ class RedditFeed(commands.Cog):
                 embed.set_image(url=post.url)
             await channel.send(embed=embed)
 
-    self.reddit = praw.Reddit("default")
-
 async def setup(bot):
     await bot.add_cog(RedditFeed(bot))
 
