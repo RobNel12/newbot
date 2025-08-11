@@ -109,13 +109,18 @@ class CombinedBot(commands.Bot):
                 self.add_view(OpenPanelView(self, guild_id=int(gid), panel_id=int(pid)))
 
         # Slash sync
-        gid = os.getenv("GUILD_ID")
-        if gid:
-            guild = discord.Object(id=int(gid))
-            self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
+        guild_ids = os.getenv("GUILD_IDS")  # e.g., "123456789012345678,987654321098765432"
+        if guild_ids:
+            for gid in guild_ids.split(","):
+                gid = gid.strip()
+                if gid.isdigit():
+                    guild = discord.Object(id=int(gid))
+                    self.tree.copy_global_to(guild=guild)
+                    await self.tree.sync(guild=guild)
+                    print(f"✅ Synced commands to guild {gid}")
         else:
             await self.tree.sync()
+            print("🌍 Synced commands globally")
 
     async def on_member_join(member: discord.Member):
         g = bot.gcfg(member.guild.id).setdefault("autorole", {})
