@@ -1020,7 +1020,15 @@ async def reddit_daily_set(
     interaction: Interaction,
     subreddit: str,
     channel: discord.TextChannel
-)
+):
+    cfg = self._cfg(interaction.guild_id)
+    cfg["subreddit"] = subreddit
+    cfg["channel_id"] = channel.id
+    self.bot.save()
+    await interaction.response.send_message(
+            f"✅ Daily top post from r/{subreddit} will be posted in {channel.mention}.",
+            ephemeral=True
+    )
 
 @app_commands.command(name="reddit_daily_disable", description="Disable daily top post")
 @app_commands.checks.has_permissions(manage_guild=True)
