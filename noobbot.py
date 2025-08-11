@@ -727,7 +727,7 @@ class RedditFeed(commands.Cog):
         else:
             await interaction.response.send_message("No feed is currently set.", ephemeral=True)
 
-    @app_commands.command(name="redditfeed_show", description="Show the current reddit feed settings.")
+   @app_commands.command(name="redditfeed_show", description="Show the current reddit feed settings.")
     async def redditfeed_show(self, interaction: discord.Interaction):
         cfg = self.feeds.get(interaction.guild_id)
         if not cfg:
