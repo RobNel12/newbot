@@ -694,6 +694,7 @@ class RedditFeed(commands.Cog):
         self.bot = bot
         self.feeds = bot.gcfg(0).setdefault("redditfeeds", {})  # global config for now
         self.post_daily_reddit.start()
+        self.reddit = praw.Reddit("default")
 
         # PRAW client
         self.reddit = praw.Reddit(
