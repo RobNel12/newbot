@@ -741,9 +741,9 @@ await interaction.response.send_message(
         f"**Channel:** {channel_display}\n"
         f"**Time:** {cfg['time_hhmm']} (server time)",
         ephemeral=True
-)
+        )
 
-    @tasks.loop(minutes=1)
+@tasks.loop(minutes=1)
     async def daily_reddit_task(self):
         now = datetime.datetime.now().strftime("%H:%M")
         for guild_id, cfg in self.feeds.items():
