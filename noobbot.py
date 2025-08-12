@@ -101,6 +101,7 @@ class CombinedBot(commands.Bot):
         await self.add_cog(AutoMod(self))
         await self.add_cog(RolePanel(self))
         await self.add_cog(RedditFeed(self))
+        await self.add_cog(Moderation(self))
         
         # Add all saved ticket panels so their buttons keep working after restart
         for gid, gdata in self.store.items():
