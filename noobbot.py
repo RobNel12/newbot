@@ -115,7 +115,6 @@ class CombinedBot(commands.Bot):
                 gid = gid.strip()
                 if gid.isdigit():
                     guild = discord.Object(id=int(gid))
-                    self.tree.copy_global_to(guild=guild)
                     await self.tree.sync(guild=guild)
                     print(f"✅ Synced commands to guild {gid}")
         
