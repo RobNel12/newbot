@@ -94,6 +94,7 @@ class CombinedBot(commands.Bot):
         self.store = load_all()
 
     async def setup_hook(self):
+        await self.load_extension("moderation")
         # Always add core views
         self.add_view(TicketControlsView(self))
         self.add_view(CoachControlsView(self))
