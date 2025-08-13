@@ -22,6 +22,7 @@ from discord import app_commands, Interaction
 from zoneinfo import ZoneInfo
 import praw
 import asyncio
+import moderation
 
 from dotenv import load_dotenv
 load_dotenv()
