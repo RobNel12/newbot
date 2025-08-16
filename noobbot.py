@@ -1058,6 +1058,8 @@ async def setup():
     await bot.load_extension("cogs.marriage")
     await bot.load_extension("cogs.admin")
 
+bot.setup_hook = setup_hook
+
 def main():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
