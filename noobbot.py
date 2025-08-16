@@ -1045,6 +1045,9 @@ bot.tree.add_command(purge)
 bot.tree.add_command(autorole)
 
 # ---------- Run Bot ----------
+async def setup():
+    await bot.load_extension("cogs.marriage")
+
 def main():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
