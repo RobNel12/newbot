@@ -1048,15 +1048,23 @@ bot.tree.add_command(autorole)
 GUILD_ID = 1304124705896136744
 
 async def setup():
-    guild = discord.Object(id=GUILD_ID)
-
-    # Sync all commands to this guild
-    bot.tree.copy_global_to(guild=guild)
-    synced = await bot.tree.sync(guild=guild)
-    print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
     await bot.load_extension("cogs.marriage")
     await bot.load_extension("cogs.admin")
 
+@bot.event
+async def on_ready():
+    print(f"✅ Logged in as {bot.user}")
+
+async def setup_hook():
+    guild = discord.Object(id=GUILD_ID)
+
+    # Load cogs first
+    await setup()
+
+    # Sync to this guild only
+    bot.tree.copy_global_to(guild=guild)
+    synced = await bot.tree.sync(guild=guild)
+    print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
 
 def main():
     token = os.getenv("DISCORD_TOKEN")
