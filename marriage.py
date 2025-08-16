@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
 
 class ProposeView(discord.ui.View):
     def __init__(self, proposer: discord.Member, proposee: discord.Member):
@@ -19,22 +20,54 @@ class ProposeView(discord.ui.View):
     @discord.ui.button(label="Accept", style=discord.ButtonStyle.success, emoji="✅")
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = True
-        await interaction.response.edit_message(content=f"💍 {self.proposee.mention} accepted {self.proposer.mention}'s proposal! 💍", view=None)
+        await interaction.response.edit_message(
+            content=f"💍 {self.proposee.mention} accepted {self.proposer.mention}'s proposal! 💍",
+            view=None
+        )
         await self.send_married_graphic(interaction.channel)
         self.stop()
 
     @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger, emoji="❌")
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.value = False
-        await interaction.response.edit_message(content=f"💔 {self.proposee.mention} declined {self.proposer.mention}'s proposal.", view=None)
+        await interaction.response.edit_message(
+            content=f"💔 {self.proposee.mention} declined {self.proposer.mention}'s proposal.",
+            view=None
+        )
         self.stop()
 
     async def send_married_graphic(self, channel: discord.TextChannel):
-        # For now we just send an image from a file; replace with your own graphic
-        with open("married.png", "rb") as f:
-            file = discord.File(f, filename="married.png")
-            await channel.send(content=f"🎉 Congratulations {self.proposer.mention} and {self.proposee.mention}! 🎉", file=file)
+        # Create a simple marriage image
+        img = Image.new("RGB", (800, 300), color=(255, 192, 203))  # Pink background
+        draw = ImageDraw.Draw(img)
 
+        # Load a font (change path if needed)
+        try:
+            font = ImageFont.truetype("arial.ttf", 40)
+        except:
+            font = ImageFont.load_default()
+
+        # Text content
+        text = f"💍 {self.proposer.display_name} & {self.proposee.display_name} 💍"
+        subtext = "Are now married!"
+
+        # Calculate positions
+        text_w, text_h = draw.textsize(text, font=font)
+        sub_w, sub_h = draw.textsize(subtext, font=font)
+
+        draw.text(((800 - text_w) / 2, 100), text, font=font, fill="black")
+        draw.text(((800 - sub_w) / 2, 180), subtext, font=font, fill="black")
+
+        # Save to BytesIO and send
+        buffer = BytesIO()
+        img.save(buffer, format="PNG")
+        buffer.seek(0)
+
+        file = discord.File(fp=buffer, filename="married.png")
+        await channel.send(
+            content=f"🎉 Congratulations {self.proposer.mention} and {self.proposee.mention}! 🎉",
+            file=file
+        )
 
 class Marriage(commands.Cog):
     def __init__(self, bot):
