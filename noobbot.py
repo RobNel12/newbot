@@ -1045,6 +1045,15 @@ bot.tree.add_command(purge)
 bot.tree.add_command(autorole)
 
 # ---------- Run Bot ----------
+GUILD_ID = 1304124705896136744
+async def setup_hook():
+    guild = discord.Object(id=GUILD_ID)
+
+    # Sync all commands to this guild
+    bot.tree.copy_global_to(guild=guild)
+    synced = await bot.tree.sync(guild=guild)
+    print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
+
 async def setup():
     await bot.load_extension("cogs.marriage")
     await bot.load_extension("cogs.admin")
