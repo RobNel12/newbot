@@ -29,6 +29,8 @@ load_dotenv()
 
 CONFIG_PATH = "combined_config.json"
 
+GUILD_ID = 1304124705896136744
+
 # ---------- Persistent Config Helpers ----------
 def load_all() -> Dict[str, Any]:
     if not os.path.exists(CONFIG_PATH):
@@ -102,6 +104,8 @@ class CombinedBot(commands.Bot):
         self.add_view(OpenCoachTicketView(self))
         await self.add_cog(AutoMod(self))
         await self.add_cog(RolePanel(self))
+        await bot.load_extension("cogs.marriage")
+        await bot.load_extension("cogs.admin")
         
         # Add all saved ticket panels so their buttons keep working after restart
         for gid, gdata in self.store.items():
@@ -1045,26 +1049,11 @@ bot.tree.add_command(purge)
 bot.tree.add_command(autorole)
 
 # ---------- Run Bot ----------
-GUILD_ID = 1304124705896136744
-
-async def setup():
-    await bot.load_extension("cogs.marriage")
-    await bot.load_extension("cogs.admin")
 
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
 
-async def setup_hook():
-    guild = discord.Object(id=GUILD_ID)
-
-    # Load cogs first
-    await setup()
-
-    # Sync to this guild only
-    bot.tree.copy_global_to(guild=guild)
-    synced = await bot.tree.sync(guild=guild)
-    print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
 
 def main():
     token = os.getenv("DISCORD_TOKEN")
