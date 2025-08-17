@@ -63,40 +63,40 @@ class TicketView(discord.ui.View):
         await interaction.channel.delete()
 
     async def create_transcript(self, channel: discord.TextChannel):
-    messages = [msg async for msg in channel.history(limit=None, oldest_first=True)]
-    html = """<html><head><meta charset="utf-8">
-    <style>
-    body { font-family: sans-serif; background: #36393f; color: #dcddde; }
-    .msg { margin: 10px 0; display: flex; }
-    .avatar { margin-right: 10px; }
-    .content { background: #2f3136; padding: 5px 10px; border-radius: 5px; max-width: 80%; }
-    img.attachment { max-width: 400px; margin-top: 5px; border-radius: 3px; }
-    </style></head><body>
-    <h2>Transcript for #{channel.name}</h2><hr>"""
+            messages = [msg async for msg in channel.history(limit=None, oldest_first=True)]
+            html = """<html><head><meta charset="utf-8">
+            <style>
+            body { font-family: sans-serif; background: #36393f; color: #dcddde; }
+            .msg { margin: 10px 0; display: flex; }
+            .avatar { margin-right: 10px; }
+            .content { background: #2f3136; padding: 5px 10px; border-radius: 5px; max-width: 80%; }
+            img.attachment { max-width: 400px; margin-top: 5px; border-radius: 3px; }
+            </style></head><body>
+            <h2>Transcript for #{channel.name}</h2><hr>"""
 
-    for msg in messages:
-        avatar = msg.author.display_avatar.url
-        name = msg.author.display_name
-        tag = str(msg.author)
-        time = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        for msg in messages:
+            avatar = msg.author.display_avatar.url
+            name = msg.author.display_name
+            tag = str(msg.author)
+            time = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
 
-        html += f"<div class='msg'>"
-        html += f"<div class='avatar'><img src='{avatar}' width='40' height='40'></div>"
-        html += f"<div class='content'><b>{name}</b> <span style='color:#72767d'>({tag})</span> <i>{time}</i><br>"
-        html += msg.clean_content.replace('\\n', '<br>')
+            html += f"<div class='msg'>"
+            html += f"<div class='avatar'><img src='{avatar}' width='40' height='40'></div>"
+            html += f"<div class='content'><b>{name}</b> <span style='color:#72767d'>({tag})</span> <i>{time}</i><br>"
+            html += msg.clean_content.replace('\\n', '<br>')
 
-        for att in msg.attachments:
-            html += f"<br><a href='{att.url}'>{att.filename}</a>"
-            if att.content_type and att.content_type.startswith('image/'):
-                html += f"<br><img class='attachment' src='{att.url}'>"
+            for att in msg.attachments:
+                html += f"<br><a href='{att.url}'>{att.filename}</a>"
+                if att.content_type and att.content_type.startswith('image/'):
+                    html += f"<br><img class='attachment' src='{att.url}'>"
 
-        for embed in msg.embeds:
-            if embed.image:
-                html += f"<br><img class='attachment' src='{embed.image.url}'>"
+            for embed in msg.embeds:
+                if embed.image:
+                    html += f"<br><img class='attachment' src='{embed.image.url}'>"
 
-        html += "</div></div>"
+            html += "</div></div>"
 
-    html += "</body></html>"
+        html += "</body></html>"
 
     filename = f"{channel.name}_transcript.html"
     with open(filename, "w", encoding="utf-8") as f:
@@ -156,4 +156,5 @@ class TicketCog(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(TicketCog(bot))
+
 
