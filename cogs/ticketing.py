@@ -1,5 +1,4 @@
-import discord, json, os, asyncio, time
-import datetime
+import discord, json, os, asyncio, time, datetime
 from discord.ext import commands
 from discord import app_commands
 from typing import List, Optional
@@ -67,7 +66,7 @@ class TicketSetupView(discord.ui.View):
             color=discord.Color.blurple()
         )
         view = TicketPanelView(self.cog, self.guild.id, self.panel_name)
-        panel_msg = await interaction.channel.send(embed=embed, view=view)
+        await interaction.channel.send(embed=embed, view=view)
 
         await interaction.response.send_message(
             f"✅ Panel `{self.panel_name}` configured and posted in {interaction.channel.mention}",
@@ -184,24 +183,22 @@ class TicketChannelView(discord.ui.View):
         await interaction.channel.send(f"🧰 Ticket claimed by {interaction.user.mention}")
         await interaction.response.defer()
 
-
     @discord.ui.button(label="Close", style=discord.ButtonStyle.red, emoji="🔒")
-async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-    opener = interaction.guild.get_member(self.opener_id)
-    claimer = interaction.guild.get_member(self.claimer_id)
-if self.claimer_id else interaction.user
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        opener = interaction.guild.get_member(self.opener_id)
+        claimer = interaction.guild.get_member(self.claimer_id) if self.claimer_id else interaction.user
 
-    await interaction.channel.send(
-        f"{opener.mention}, please leave a review for {claimer.mention}:",
-        view=ReviewView(self.cog, self.log_channel, opener, claimer)
-    )
+        await interaction.channel.send(
+            f"{opener.mention}, please leave a review for {claimer.mention}:",
+            view=ReviewView(self.cog, self.log_channel, opener, claimer)
+        )
 
-    await interaction.channel.send("🔒 Ticket will be deleted in 15s...")
+        await interaction.channel.send("🔒 Ticket will be deleted in 15s...")
 
-    delete_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=15)
-    await discord.utils.sleep_until(delete_time)
+        delete_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=15)
+        await discord.utils.sleep_until(delete_time)
 
-    await interaction.channel.delete()
+        await interaction.channel.delete()
 
 
 # ---------------- Review ----------------
