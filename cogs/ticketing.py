@@ -5,7 +5,6 @@ from typing import List, Optional
 
 CONFIG_FILE = "ticket_config.json"
 
-
 # ---------------- Persistence ----------------
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -16,11 +15,41 @@ def load_config():
     except Exception:
         return {}
 
-
 def save_config(cfg: dict):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2)
 
+# ---------------- Helpers ----------------
+def slugify(name: str, max_len: int = 90) -> str:
+    """
+    Make a Discord-channel-safe slug from a username.
+    - Lowercase
+    - Letters/numbers/underscore/hyphen only
+    - Collapse/trim separators
+    - Truncate to fit within Discord 100-char limit when prefixed with '000-'
+    """
+    name = name.lower()
+    cleaned = []
+    last_sep = False
+    for ch in name:
+        if ch.isalnum() or ch in "_-":
+            cleaned.append(ch)
+            last_sep = False
+        else:
+            if not last_sep:
+                cleaned.append("-")
+            last_sep = True
+    slug = "".join(cleaned).strip("-_")
+    if len(slug) > max_len:
+        slug = slug[:max_len].rstrip("-_")
+    return slug or "user"
+
+def split_ticket_prefix(current: str) -> Optional[str]:
+    """Return the leading 3-digit ticket number (e.g., '001') from a channel name if present."""
+    parts = current.split("-", 1)
+    if len(parts) >= 1 and parts[0].isdigit() and len(parts[0]) == 3:
+        return parts[0]
+    return None
 
 # ---------------- Setup UI ----------------
 class TicketSetupView(discord.ui.View):
@@ -75,7 +104,6 @@ class TicketSetupView(discord.ui.View):
         )
         self.stop()
 
-
 class CategorySelect(discord.ui.ChannelSelect):
     def __init__(self, view: TicketSetupView):
         super().__init__(placeholder="Select category", channel_types=[discord.ChannelType.category], min_values=1, max_values=1)
@@ -84,7 +112,6 @@ class CategorySelect(discord.ui.ChannelSelect):
     async def callback(self, interaction: discord.Interaction):
         self.view_ref.category = self.values[0].id
         await interaction.response.defer()
-
 
 class ViewRolesSelect(discord.ui.RoleSelect):
     def __init__(self, view: TicketSetupView):
@@ -95,7 +122,6 @@ class ViewRolesSelect(discord.ui.RoleSelect):
         self.view_ref.view_roles = [r.id for r in self.values]
         await interaction.response.defer()
 
-
 class DeleteRolesSelect(discord.ui.RoleSelect):
     def __init__(self, view: TicketSetupView):
         super().__init__(placeholder="Select delete roles", min_values=0, max_values=5)
@@ -105,7 +131,6 @@ class DeleteRolesSelect(discord.ui.RoleSelect):
         self.view_ref.delete_roles = [r.id for r in self.values]
         await interaction.response.defer()
 
-
 class LogChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, view: TicketSetupView):
         super().__init__(placeholder="Select log channel", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
@@ -114,7 +139,6 @@ class LogChannelSelect(discord.ui.ChannelSelect):
     async def callback(self, interaction: discord.Interaction):
         self.view_ref.log_channel = self.values[0].id
         await interaction.response.defer()
-
 
 # ---------------- Ticket Panel ----------------
 class TicketPanelView(discord.ui.View):
@@ -140,6 +164,17 @@ class TicketPanelView(discord.ui.View):
         if not isinstance(category, discord.CategoryChannel):
             return await interaction.response.send_message("⚠️ Category missing.", ephemeral=True)
 
+        # --- Ticket counter (per guild) ---
+        guild_cfg = self.cog.config.setdefault(self.guild_id, {})
+        counter = guild_cfg.setdefault("ticket_counter", 1)
+        ticket_number = counter
+        guild_cfg["ticket_counter"] = counter + 1
+        save_config(self.cog.config)
+
+        # --- Build channel name: 000-opener ---
+        opener_slug = slugify(interaction.user.name)
+        chan_name = f"{ticket_number:03d}-{opener_slug}"
+
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
@@ -151,14 +186,14 @@ class TicketPanelView(discord.ui.View):
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
         channel = await guild.create_text_channel(
-            f"{self.panel_name}-ticket-{interaction.user.name}",
+            chan_name,
             category=category,
             overwrites=overwrites
         )
 
         log_channel = guild.get_channel(cfg["log_channel"])
         if log_channel:
-            await log_channel.send(f"📩 Ticket opened in `{self.panel_name}` by {interaction.user.mention} → {channel.mention}")
+            await log_channel.send(f"📩 Ticket #{ticket_number:03d} opened in `{self.panel_name}` by {interaction.user.mention} → {channel.mention}")
 
         await channel.send(
             f"{interaction.user.mention} opened a ticket!",
@@ -166,10 +201,9 @@ class TicketPanelView(discord.ui.View):
         )
         await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
-
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
-    def __init__(self, opener_id: int, cog: "TicketCog", log_channel: discord.TextChannel):
+    def __init__(self, opener_id: int, cog: "TicketCog", log_channel: Optional[discord.TextChannel]):
         super().__init__(timeout=None)  # persistent
         self.opener_id = opener_id
         self.cog = cog
@@ -186,6 +220,25 @@ class TicketChannelView(discord.ui.View):
             return await interaction.response.send_message("⚠️ You are not in the roster and cannot claim.", ephemeral=True)
 
         self.claimer_id = interaction.user.id
+
+        # Rename channel to 000-opener-claimer (keep the numeric prefix intact)
+        channel = interaction.channel
+        if isinstance(channel, discord.TextChannel):
+            opener = guild.get_member(self.opener_id)
+            opener_slug = slugify(opener.name if opener else "opener")
+            claimer_slug = slugify(interaction.user.name)
+            prefix = split_ticket_prefix(channel.name) or "000"
+            # Ensure we don't exceed 100 chars total
+            # Reserve 4 for "000-" and 1 hyphen between opener and claimer
+            # so trim each slug to fit comfortably.
+            max_each = 100 - (4 + 1 + len(prefix))  # rough allowance (Discord hard cap is 100)
+            # Split between opener/claimer roughly in half if needed
+            half = max_each // 2
+            opener_slug = opener_slug[:half]
+            claimer_slug = claimer_slug[:max_each - len(opener_slug)]
+            new_name = f"{prefix}-{opener_slug}-{claimer_slug}".rstrip("-")
+            await channel.edit(name=new_name)
+
         await interaction.channel.send(f"🧰 Ticket claimed by {interaction.user.mention}")
         await interaction.response.defer()
 
@@ -195,7 +248,7 @@ class TicketChannelView(discord.ui.View):
         claimer = interaction.guild.get_member(self.claimer_id) if self.claimer_id else interaction.user
 
         await interaction.channel.send(
-            f"{opener.mention}, please leave a review for {claimer.mention}:",
+            f"{opener.mention if opener else 'The opener'}, please leave a review for {claimer.mention}:",
             view=ReviewView(self.cog, self.log_channel, opener, claimer)
         )
 
@@ -206,10 +259,9 @@ class TicketChannelView(discord.ui.View):
 
         await interaction.channel.delete()
 
-
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
-    def __init__(self, cog: "TicketCog", log_channel: discord.TextChannel, opener: discord.Member, staff: discord.Member):
+    def __init__(self, cog: "TicketCog", log_channel: Optional[discord.TextChannel], opener: Optional[discord.Member], staff: discord.Member):
         super().__init__(timeout=None)  # persistent
         self.cog = cog
         self.log_channel = log_channel
@@ -220,7 +272,7 @@ class ReviewView(discord.ui.View):
     async def thumbs_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.record_review(interaction.guild.id, self.staff.id, positive=True)
         if self.log_channel:
-            await self.log_channel.send(f"✅ {self.opener} left a positive review for {self.staff}.")
+            await self.log_channel.send(f"✅ {self.opener or 'User'} left a positive review for {self.staff}.")
         await interaction.response.send_message("Thanks for your feedback! ✅", ephemeral=True)
         self.stop()
 
@@ -228,10 +280,9 @@ class ReviewView(discord.ui.View):
     async def thumbs_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.record_review(interaction.guild.id, self.staff.id, positive=False)
         if self.log_channel:
-            await self.log_channel.send(f"❌ {self.opener} left a negative review for {self.staff}.")
+            await self.log_channel.send(f"❌ {self.opener or 'User'} left a negative review for {self.staff}.")
         await interaction.response.send_message("Thanks for your feedback! ❌", ephemeral=True)
         self.stop()
-
 
 # ---------------- Cog ----------------
 class TicketCog(commands.Cog):
@@ -376,10 +427,9 @@ class TicketCog(commands.Cog):
         for gid, gdata in self.config.items():
             for panel_name in gdata.get("panels", {}):
                 self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
-            # Also re-add review/claim views so buttons stay alive
-            self.bot.add_view(TicketChannelView(0, self, None))  # dummy opener_id/log_channel
-            self.bot.add_view(ReviewView(self, None, None, None))
-
+        # Register button handlers so custom_ids resolve after restarts
+        self.bot.add_view(TicketChannelView(0, self, None))  # dummy values; real state handled per-message
+        self.bot.add_view(ReviewView(self, None, None, self.bot.user))  # dummy staff; overwritten on actual messages
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(TicketCog(bot))
