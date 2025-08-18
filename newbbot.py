@@ -26,7 +26,7 @@ class ModBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        await self.load_extension("cogs.coaching")
+        await self.load_extension("cogs.ticketing")
         # Global sync. For instant dev sync to a single guild, uncomment the next 2 lines:
         guild = discord.Object(id=1304124705896136744)
         await self.tree.sync(guild=guild)
