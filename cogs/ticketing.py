@@ -24,6 +24,7 @@ def save_config(cfg: dict):
 
 # ---------------- Setup UI ----------------
 class TicketSetupView(discord.ui.View):
+    """Ephemeral view for admins to configure a new panel. Not persistent."""
     def __init__(self, cog, guild: discord.Guild, panel_name: str):
         super().__init__(timeout=300)
         self.cog = cog
@@ -118,12 +119,17 @@ class LogChannelSelect(discord.ui.ChannelSelect):
 # ---------------- Ticket Panel ----------------
 class TicketPanelView(discord.ui.View):
     def __init__(self, cog, guild_id: int, panel_name: str):
-        super().__init__(timeout=None)
+        super().__init__(timeout=None)  # persistent
         self.cog = cog
         self.guild_id = str(guild_id)
         self.panel_name = panel_name
 
-    @discord.ui.button(label="Open Ticket", style=discord.ButtonStyle.blurple, emoji="🎫")
+    @discord.ui.button(
+        label="Open Ticket",
+        style=discord.ButtonStyle.blurple,
+        emoji="🎫",
+        custom_id="ticket:open"
+    )
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg = self.cog.config.get(self.guild_id, {}).get("panels", {}).get(self.panel_name)
         if not cfg:
@@ -164,13 +170,13 @@ class TicketPanelView(discord.ui.View):
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
     def __init__(self, opener_id: int, cog: "TicketCog", log_channel: discord.TextChannel):
-        super().__init__(timeout=None)
+        super().__init__(timeout=None)  # persistent
         self.opener_id = opener_id
         self.cog = cog
         self.log_channel = log_channel
         self.claimer_id: Optional[int] = None
 
-    @discord.ui.button(label="Claim", style=discord.ButtonStyle.secondary, emoji="🧰")
+    @discord.ui.button(label="Claim", style=discord.ButtonStyle.secondary, emoji="🧰", custom_id="ticket:claim")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
         g = self.cog.config.get(str(guild.id), {})
@@ -183,7 +189,7 @@ class TicketChannelView(discord.ui.View):
         await interaction.channel.send(f"🧰 Ticket claimed by {interaction.user.mention}")
         await interaction.response.defer()
 
-    @discord.ui.button(label="Close", style=discord.ButtonStyle.red, emoji="🔒")
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.red, emoji="🔒", custom_id="ticket:close")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         opener = interaction.guild.get_member(self.opener_id)
         claimer = interaction.guild.get_member(self.claimer_id) if self.claimer_id else interaction.user
@@ -204,13 +210,13 @@ class TicketChannelView(discord.ui.View):
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
     def __init__(self, cog: "TicketCog", log_channel: discord.TextChannel, opener: discord.Member, staff: discord.Member):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)  # persistent
         self.cog = cog
         self.log_channel = log_channel
         self.opener = opener
         self.staff = staff
 
-    @discord.ui.button(emoji="👍", style=discord.ButtonStyle.success)
+    @discord.ui.button(emoji="👍", style=discord.ButtonStyle.success, custom_id="ticket:review_up")
     async def thumbs_up(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.record_review(interaction.guild.id, self.staff.id, positive=True)
         if self.log_channel:
@@ -218,7 +224,7 @@ class ReviewView(discord.ui.View):
         await interaction.response.send_message("Thanks for your feedback! ✅", ephemeral=True)
         self.stop()
 
-    @discord.ui.button(emoji="👎", style=discord.ButtonStyle.danger)
+    @discord.ui.button(emoji="👎", style=discord.ButtonStyle.danger, custom_id="ticket:review_down")
     async def thumbs_down(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.record_review(interaction.guild.id, self.staff.id, positive=False)
         if self.log_channel:
@@ -370,6 +376,9 @@ class TicketCog(commands.Cog):
         for gid, gdata in self.config.items():
             for panel_name in gdata.get("panels", {}):
                 self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
+            # Also re-add review/claim views so buttons stay alive
+            self.bot.add_view(TicketChannelView(0, self, None))  # dummy opener_id/log_channel
+            self.bot.add_view(ReviewView(self, None, None, None))
 
 
 async def setup(bot: commands.Bot):
