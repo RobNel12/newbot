@@ -362,21 +362,21 @@ class TicketChannelView(discord.ui.View):
                 lines.append(f"{c} messages by {name}")
             embed.add_field(name="Participants", value="\n".join(lines), inline=False)
     
-        # Send transcript file first to get URL, then send embed with button
+        # Send the transcript file only to the logs channel
         sent = await logs.send(file=f)
+        
+        # If we got an attachment URL back, add it as a button on the embed
         transcript_url = sent.attachments[0].url if sent.attachments else None
-    
         view = None
         if transcript_url:
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
-    
+        
+        # Now send the embed (without duplicating the file) into the logs channel
         await logs.send(embed=embed, view=view)
-    
-        # Finally delete the ticket channel
+        
+        # Finally delete the ticket channel itself
         await channel.delete()
-    
-
 
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
