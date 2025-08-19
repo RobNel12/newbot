@@ -160,13 +160,12 @@ class TicketPanelView(discord.ui.View):
 
         channel = await guild.create_text_channel(chan_name, category=category, overwrites=overwrites)
 
-        # Remember metadata for logs
-        chdata = self.cog.channel_meta.setdefault(str(channel.id), {
+        self.cog.channel_meta[str(channel.id)] = {
             "ticket_number": ticket_number,
             "panel_name": self.panel_name,
             "opener_id": interaction.user.id,
             "opened_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
-        })
+        }
         save_config(self.cog.config)
 
         log_channel = guild.get_channel(cfg["log_channel"])
@@ -180,7 +179,6 @@ class TicketPanelView(discord.ui.View):
             )
             log_msg = await log_channel.send(embed=embed)
 
-        # Ticket control view
         await channel.send(
             f"{interaction.user.mention} opened a ticket!",
             view=TicketChannelView(
@@ -205,7 +203,6 @@ class TicketChannelView(discord.ui.View):
         self.closed: bool = False
         self.channel_id = channel_id
 
-    # Row layout: Claim | Close | Reopen | Delete
     @discord.ui.button(label="Claim", style=discord.ButtonStyle.secondary, emoji="🎟️", custom_id="ticket:claim", row=0)
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         g = self.cog.config.get(str(interaction.guild.id), {})
@@ -223,11 +220,10 @@ class TicketChannelView(discord.ui.View):
         self.closed = True
         await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=False)
 
-        # Optionally ask for review
         claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
         opener = interaction.guild.get_member(self.opener_id)
         await interaction.channel.send(
-            f"{opener.mention if opener else 'The opener'}, please leave a review for {claimer.mention}:",
+            (f"{opener.mention}" if opener else "The opener") + f", please leave a review for {claimer.mention}:",
             view=ReviewView(self.cog, self.log_channel, opener_id=self.opener_id,
                             staff_id=claimer.id if isinstance(claimer, discord.Member) else interaction.user.id,
                             log_msg=self.log_msg)
@@ -243,7 +239,6 @@ class TicketChannelView(discord.ui.View):
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket:delete", row=0)
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Only staff listed in delete_roles OR admins can delete
         cfg = self.cog.config.get(str(interaction.guild.id), {}).get("panels", {}).get(
             self.cog.channel_meta.get(str(self.channel_id), {}).get("panel_name", ""), {}
         )
@@ -264,7 +259,6 @@ class TicketChannelView(discord.ui.View):
         await self._log_and_delete(interaction.channel, interaction.user)
 
     async def _lock_channel(self, channel: discord.TextChannel, lock: bool):
-        # Prevent users from sending messages when locked, keep it visible
         overwrites = channel.overwrites
         for target, perms in list(overwrites.items()):
             if isinstance(target, (discord.Role, discord.Member)):
@@ -274,16 +268,13 @@ class TicketChannelView(discord.ui.View):
         await channel.edit(overwrites=overwrites)
 
     async def _log_and_delete(self, channel: discord.TextChannel, deleted_by: discord.Member):
-        # Build participants count
         counts: Dict[int, int] = {}
         async for msg in channel.history(limit=None, oldest_first=True):
             if msg.author.bot:
-                # Skip obvious system/bot prompts from the transcript counting
                 if any(s in (msg.content or "").lower() for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
 
-        # Export transcript HTML to file and send to log channel
         transcript_html = await chat_exporter.quick_export(channel, limit=None)
         file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=f"ticket_{self.cog.channel_meta[str(channel.id)]['ticket_number']:03d}.html")
         transcript_url = None
@@ -292,7 +283,6 @@ class TicketChannelView(discord.ui.View):
             if sent.attachments:
                 transcript_url = sent.attachments[0].url
 
-        # Build and send rich embed log
         meta = self.cog.channel_meta.get(str(channel.id), {})
         opener = channel.guild.get_member(meta.get("opener_id", 0))
         embed = discord.Embed(
@@ -300,18 +290,16 @@ class TicketChannelView(discord.ui.View):
             color=discord.Color.blurple(),
             timestamp=discord.utils.utcnow(),
         )
-        opened_at = meta.get("opened_at", None)
-        embed.add_field(name="Created by", value=f"{opener.mention if opener else f'<@{meta.get(\"opener_id\")}>'}", inline=True)
-        embed.add_field(name="Deleted by", value=f"{deleted_by.mention}", inline=True)
+        embed.add_field(name="Created by", value=(opener.mention if opener else f"<@{meta.get('opener_id')}>"), inline=True)
+        embed.add_field(name="Deleted by", value=deleted_by.mention, inline=True)
 
         if counts:
-            # Top participants
             lines = []
             for uid, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]:
                 mem = channel.guild.get_member(uid)
                 name = mem.mention if mem else f"<@{uid}>"
                 lines.append(f"{c} messages by {name}")
-            embed.add_field(name="Participants", value="\n".join(lines), inline=False)
+            embed.add_field(name="Participants", value="\\n".join(lines), inline=False)
 
         view = None
         if transcript_url:
@@ -321,7 +309,6 @@ class TicketChannelView(discord.ui.View):
         if self.log_channel:
             await self.log_channel.send(embed=embed, view=view)
 
-        # Finally delete the channel
         await channel.delete()
 
 # ---------------- Review ----------------
@@ -373,7 +360,6 @@ class TicketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = load_config()
-        # Store per-channel meta (not persisted separately; nested under config for simplicity)
         self.channel_meta: Dict[str, Dict] = self.config.setdefault("_channel_meta", {})
         save_config(self.config)
         self._autopost_task = self.bot.loop.create_task(self.autopost_loop())
@@ -419,4 +405,23 @@ class TicketCog(commands.Cog):
                 total = data["good"] + data["bad"]
                 if total > 0:
                     percent = (data["good"] / total) * 100
-                    rating = f"
+                    rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
+                else:
+                    rating = "No reviews yet"
+                embed.add_field(name=data["name"], value=rating, inline=False)
+        return embed
+
+    async def record_review(self, guild_id: int, staff_id: int, positive: bool):
+        g = self.config.setdefault(str(guild_id), {})
+        roster = g.setdefault("roster", {})
+        entry = roster.setdefault(str(staff_id), {"name": "Unknown", "good": 0, "bad": 0})
+        if positive:
+            entry["good"] += 1
+        else:
+            entry["bad"] += 1
+        save_config(self.config)
+
+    async def autopost_loop(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            await a
