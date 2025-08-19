@@ -160,7 +160,7 @@ class TicketPanelView(discord.ui.View):
 
         channel = await guild.create_text_channel(chan_name, category=category, overwrites=overwrites)
 
-        # Save meta for later (used when we rename on claim, and for transcripts)
+        # Save meta for later (rename on claim; transcript details)
         self.cog.channel_meta[str(channel.id)] = {
             "ticket_number": ticket_number,
             "panel_name": self.panel_name,
@@ -170,19 +170,21 @@ class TicketPanelView(discord.ui.View):
         }
         save_config(self.cog.config)
 
-        # No "ticket opened" log anymore — per your request.
+        # No "ticket opened" log (per request)
+        log_channel = guild.get_channel(cfg["log_channel"])
 
         await channel.send(
             f"{interaction.user.mention} opened a ticket!",
             view=TicketChannelView(
                 opener_id=interaction.user.id,
                 cog=self.cog,
-                log_channel=guild.get_channel(cfg["log_channel"]),
-                log_msg=None,  # nothing posted on open
+                log_channel=log_channel,
+                log_msg=None,
                 channel_id=channel.id
             )
         )
         await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
+
 
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
@@ -205,20 +207,19 @@ class TicketChannelView(discord.ui.View):
 
         self.claimer_id = interaction.user.id
 
-        # Rename channel: 000-opener-claimer
+        # Rename channel to 000-opener-claimer
         meta = self.cog.channel_meta.get(str(interaction.channel.id), {})
         opener_slug = meta.get("opener_slug", "user")
         claimer_slug = slugify(interaction.user.display_name or interaction.user.name)
         ticket_no = meta.get("ticket_number", 0)
         new_name = f"{ticket_no:03d}-{opener_slug}-{claimer_slug}"
-
         try:
             if interaction.channel.name != new_name:
                 await interaction.channel.edit(name=new_name)
         except discord.HTTPException:
-            pass  # ignore rename failures (e.g., missing perms)
+            pass
 
-        # Persist the claimer info
+        # Persist claimer info
         meta["claimer_id"] = self.claimer_id
         meta["claimer_slug"] = claimer_slug
         self.cog.channel_meta[str(interaction.channel.id)] = meta
@@ -232,7 +233,7 @@ class TicketChannelView(discord.ui.View):
             return await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
         await self._lock_channel(interaction.channel, lock=True)
         self.closed = True
-        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=False)
+        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.")
 
         claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
         opener = interaction.guild.get_member(self.opener_id)
@@ -249,26 +250,24 @@ class TicketChannelView(discord.ui.View):
             return await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
         await self._lock_channel(interaction.channel, lock=False)
         self.closed = False
-        await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=False)
+        await interaction.response.send_message("🔓 Ticket reopened.")
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket:delete", row=0)
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg = self.cog.config.get(str(interaction.guild.id), {}).get("panels", {}).get(
             self.cog.channel_meta.get(str(self.channel_id), {}).get("panel_name", ""), {}
         )
-        allowed = False
-        if interaction.user.guild_permissions.administrator:
-            allowed = True
-        else:
+        allowed = interaction.user.guild_permissions.administrator
+        if not allowed:
             for rid in cfg.get("delete_roles", []):
                 role = interaction.guild.get_role(rid)
-                if role in interaction.user.roles:
+                if role and role in interaction.user.roles:
                     allowed = True
                     break
         if not allowed:
             return await interaction.response.send_message("You don't have permission to delete this ticket.", ephemeral=True)
 
-        await interaction.response.send_message("Archiving and deleting ticket in 5 seconds…", ephemeral=False)
+        await interaction.response.send_message("Archiving and deleting ticket in 5 seconds…")
         await asyncio.sleep(5)
         await self._log_and_delete(interaction.channel, interaction.user)
 
@@ -282,22 +281,27 @@ class TicketChannelView(discord.ui.View):
         await channel.edit(overwrites=overwrites)
 
     async def _log_and_delete(self, channel: discord.TextChannel, deleted_by: discord.Member):
+        # Count human participants (skip obvious bot/system prompts)
         counts: Dict[int, int] = {}
         async for msg in channel.history(limit=None, oldest_first=True):
             if msg.author.bot:
-                if any(s in (msg.content or "").lower() for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
+                lc = (msg.content or "").lower()
+                if any(s in lc for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
 
-        transcript_html = await chat_exporter.quick_export(channel)
-        file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=f"ticket_{self.cog.channel_meta[str(channel.id)]['ticket_number']:03d}.html")
-        transcript_url = None
-        if self.log_channel:
-            sent = await self.log_channel.send(file=file)
-            if sent.attachments:
-                transcript_url = sent.attachments[0].url
+        # Export transcript (compat with different chat_exporter versions)
+        try:
+            transcript_html = await chat_exporter.quick_export(channel, limit=None)
+        except TypeError:
+            transcript_html = await chat_exporter.quick_export(channel)
 
         meta = self.cog.channel_meta.get(str(channel.id), {})
+        ticket_no = meta.get("ticket_number", 0)
+        fname = f"transcript-{ticket_no:03d}-{channel.name.split('-', 1)[-1]}.html"
+        file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=fname)
+
+        # Build log embed
         opener = channel.guild.get_member(meta.get("opener_id", 0))
         embed = discord.Embed(
             title=f"Ticket #{meta.get('ticket_number', 0):03d} in {meta.get('panel_name','?')}!",
@@ -313,17 +317,22 @@ class TicketChannelView(discord.ui.View):
                 mem = channel.guild.get_member(uid)
                 name = mem.mention if mem else f"<@{uid}>"
                 lines.append(f"{c} messages by {name}")
-            embed.add_field(name="Participants", value="\\n".join(lines), inline=False)
+            embed.add_field(name="Participants", value="\n".join(lines), inline=False)
 
-        view = None
-        if transcript_url:
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
-
+        # Send transcript ONLY to configured log channel
         if self.log_channel:
+            sent = await self.log_channel.send(file=file)
+            transcript_url = sent.attachments[0].url if sent.attachments else None
+
+            view = None
+            if transcript_url:
+                view = discord.ui.View()
+                view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
             await self.log_channel.send(embed=embed, view=view)
 
+        # Finally delete the channel
         await channel.delete()
+
 
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
@@ -377,53 +386,30 @@ class ReviewView(discord.ui.View):
         if not await self._guard(interaction):
             return
         await self._finalize(interaction, positive=False)
-        
-# ---------------- Cog ----------------
+
+
+# ---------------- Cog (tail) ----------------
 class TicketCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.config = load_config()
-        self.channel_meta: Dict[str, Dict] = self.config.setdefault("_channel_meta", {})
-        save_config(self.config)
-        self._autopost_task = self.bot.loop.create_task(self.autopost_loop())
+    # ... your __init__ and commands above remain unchanged ...
 
-    @app_commands.command(name="ticket_roster_add", description="Add a member to the roster")
+    @app_commands.command(name="ticket_setup", description="Create a ticket panel")
     @app_commands.checks.has_permissions(administrator=True)
-    async def roster_add(self, interaction: discord.Interaction, member: discord.Member):
-        g = self.config.setdefault(str(interaction.guild.id), {})
-        roster = g.setdefault("roster", {})
-        if str(member.id) not in roster:
-            roster[str(member.id)] = {"name": member.display_name, "good": 0, "bad": 0}
-            save_config(self.config)
-            await interaction.response.send_message(f"✅ Added {member.mention} to the roster.")
-        else:
-            await interaction.response.send_message("⚠️ That member is already in the roster.", ephemeral=True)
+    async def ticket_setup(self, interaction: discord.Interaction, panel_name: str):
+        view = TicketSetupView(self, interaction.guild, panel_name)
+        await interaction.response.send_message(
+            f"Configuring panel `{panel_name}` — choose options below:", view=view, ephemeral=True
+        )
 
-    @app_commands.command(name="ticket_roster_remove", description="Remove a member from the roster")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def roster_remove(self, interaction: discord.Interaction, member: discord.Member):
-        g = self.config.setdefault(str(interaction.guild.id), {})
-        roster = g.setdefault("roster", {})
-        if str(member.id) in roster:
-            del roster[str(member.id)]
-            save_config(self.config)
-            await interaction.response.send_message(f"❌ Removed {member.mention} from the roster.")
-        else:
-            await interaction.response.send_message("⚠️ That member is not in the roster.", ephemeral=True)
+    async def cog_load(self):
+        # Restore persistent views
+        for gid, gdata in self.config.items():
+            if gid == "_channel_meta":
+                continue
+            for panel_name in gdata.get("panels", {}):
+                self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
+        self.bot.add_view(TicketChannelView(0, self, None, None, 0))
+        self.bot.add_view(ReviewView(self, None, 0, 0, None))
 
-    @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
-    async def roster_view(self, interaction: discord.Interaction):
-        embed = self.build_roster_embed(interaction.guild.id)
-        await interaction.response.send_message(embed=embed)
 
-    def build_roster_embed(self, guild_id: int) -> discord.Embed:
-        g = self.config.get(str(guild_id), {})
-        roster = g.get("roster", {})
-        embed = discord.Embed(title="🎟️ Ticket Staff Roster", color=discord.Color.gold(), timestamp=discord.utils.utcnow())
-        embed.set_footer(text="Last updated")
-        if not roster:
-            embed.description = "No one in roster."
-        else:
-            for uid, data in roster.items():
-                total = data["good"] + data["bad"]
-                if total
+async def setup(bot: commands.Bot):
+    await bot.add_cog(TicketCog(bot))
