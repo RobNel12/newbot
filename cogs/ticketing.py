@@ -424,4 +424,25 @@ class TicketCog(commands.Cog):
     async def autopost_loop(self):
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            await a
+            await asyncio.sleep(60)
+
+    @app_commands.command(name="ticket_setup", description="Create a ticket panel")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def ticket_setup(self, interaction: discord.Interaction, panel_name: str):
+        view = TicketSetupView(self, interaction.guild, panel_name)
+        await interaction.response.send_message(
+            f"Configuring panel `{panel_name}` — choose options below:", view=view, ephemeral=True
+        )
+
+    async def cog_load(self):
+        # Restore persistent views
+        for gid, gdata in self.config.items():
+            if gid == "_channel_meta":
+                continue
+            for panel_name in gdata.get("panels", {}):
+                self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
+        self.bot.add_view(TicketChannelView(0, self, None, None, 0))
+        self.bot.add_view(ReviewView(self, None, 0, 0, None))
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(TicketCog(bot))
