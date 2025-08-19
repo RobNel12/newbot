@@ -182,7 +182,7 @@ class TicketPanelView(discord.ui.View):
                 channel_id=channel.id
             )
         )
-        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True
+        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
@@ -426,4 +426,4 @@ class TicketCog(commands.Cog):
         else:
             for uid, data in roster.items():
                 total = data["good"] + data["bad"]
-                if total 
+                if total
