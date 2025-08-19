@@ -390,8 +390,77 @@ class ReviewView(discord.ui.View):
 
 # ---------------- Cog (tail) ----------------
 class TicketCog(commands.Cog):
-    # ... your __init__ and commands above remain unchanged ...
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        # create/load config early so cog_load can use it
+        self.config: Dict[str, Dict] = load_config()
+        # nested store for per-channel metadata
+        self.channel_meta: Dict[str, Dict] = self.config.setdefault("_channel_meta", {})
+        save_config(self.config)
+        # optional background task
+        self._autopost_task = self.bot.loop.create_task(self.autopost_loop())
 
+    # ---------- Roster commands ----------
+    @app_commands.command(name="ticket_roster_add", description="Add a member to the roster")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def roster_add(self, interaction: discord.Interaction, member: discord.Member):
+        g = self.config.setdefault(str(interaction.guild.id), {})
+        roster = g.setdefault("roster", {})
+        if str(member.id) in roster:
+            return await interaction.response.send_message("⚠️ That member is already in the roster.", ephemeral=True)
+        roster[str(member.id)] = {"name": member.display_name, "good": 0, "bad": 0}
+        save_config(self.config)
+        await interaction.response.send_message(f"✅ Added {member.mention} to the roster.")
+
+    @app_commands.command(name="ticket_roster_remove", description="Remove a member from the roster")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def roster_remove(self, interaction: discord.Interaction, member: discord.Member):
+        g = self.config.setdefault(str(interaction.guild.id), {})
+        roster = g.setdefault("roster", {})
+        if roster.pop(str(member.id), None) is None:
+            return await interaction.response.send_message("⚠️ That member is not in the roster.", ephemeral=True)
+        save_config(self.config)
+        await interaction.response.send_message(f"❌ Removed {member.mention} from the roster.")
+
+    @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
+    async def roster_view(self, interaction: discord.Interaction):
+        embed = self.build_roster_embed(interaction.guild.id)
+        await interaction.response.send_message(embed=embed)
+
+    def build_roster_embed(self, guild_id: int) -> discord.Embed:
+        g = self.config.get(str(guild_id), {})
+        roster = g.get("roster", {})
+        embed = discord.Embed(title="🎟️ Ticket Staff Roster", color=discord.Color.gold(), timestamp=discord.utils.utcnow())
+        embed.set_footer(text="Last updated")
+        if not roster:
+            embed.description = "No one in roster."
+        else:
+            for _, data in roster.items():
+                total = data["good"] + data["bad"]
+                if total:
+                    percent = (data["good"] / total) * 100
+                    rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
+                else:
+                    rating = "No reviews yet"
+                embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
+        return embed
+
+    async def record_review(self, guild_id: int, staff_id: int, positive: bool):
+        g = self.config.setdefault(str(guild_id), {})
+        roster = g.setdefault("roster", {})
+        entry = roster.setdefault(str(staff_id), {"name": "Unknown", "good": 0, "bad": 0})
+        if positive:
+            entry["good"] += 1
+        else:
+            entry["bad"] += 1
+        save_config(self.config)
+
+    async def autopost_loop(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            await asyncio.sleep(60)
+
+    # ---------- Panel setup ----------
     @app_commands.command(name="ticket_setup", description="Create a ticket panel")
     @app_commands.checks.has_permissions(administrator=True)
     async def ticket_setup(self, interaction: discord.Interaction, panel_name: str):
@@ -400,13 +469,19 @@ class TicketCog(commands.Cog):
             f"Configuring panel `{panel_name}` — choose options below:", view=view, ephemeral=True
         )
 
+    # ---------- Persistent views ----------
     async def cog_load(self):
-        # Restore persistent views
-        for gid, gdata in self.config.items():
+        # Ensure config exists if something recreated the Cog without __init__ (defensive)
+        if not hasattr(self, "config") or self.config is None:
+            self.config = load_config()
+            self.channel_meta = self.config.setdefault("_channel_meta", {})
+        # Restore panel views
+        for gid, gdata in list(self.config.items()):
             if gid == "_channel_meta":
                 continue
             for panel_name in gdata.get("panels", {}):
                 self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
+        # Register persistent action views
         self.bot.add_view(TicketChannelView(0, self, None, None, 0))
         self.bot.add_view(ReviewView(self, None, 0, 0, None))
 
