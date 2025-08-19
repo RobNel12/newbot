@@ -160,36 +160,29 @@ class TicketPanelView(discord.ui.View):
 
         channel = await guild.create_text_channel(chan_name, category=category, overwrites=overwrites)
 
+        # Save meta for later (used when we rename on claim, and for transcripts)
         self.cog.channel_meta[str(channel.id)] = {
             "ticket_number": ticket_number,
             "panel_name": self.panel_name,
             "opener_id": interaction.user.id,
+            "opener_slug": opener_slug,
             "opened_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
         save_config(self.cog.config)
 
-        log_channel = guild.get_channel(cfg["log_channel"])
-        log_msg = None
-        if log_channel:
-            embed = discord.Embed(
-                title=f"Ticket #{ticket_number:03d} in {self.panel_name}!",
-                description=f"Created by {interaction.user.mention} in {channel.mention}",
-                color=discord.Color.blurple(),
-                timestamp=discord.utils.utcnow(),
-            )
-            log_msg = await log_channel.send(embed=embed)
+        # No "ticket opened" log anymore — per your request.
 
         await channel.send(
             f"{interaction.user.mention} opened a ticket!",
             view=TicketChannelView(
                 opener_id=interaction.user.id,
                 cog=self.cog,
-                log_channel=log_channel,
-                log_msg=log_msg,
+                log_channel=guild.get_channel(cfg["log_channel"]),
+                log_msg=None,  # nothing posted on open
                 channel_id=channel.id
             )
         )
-        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True
 
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
@@ -209,8 +202,29 @@ class TicketChannelView(discord.ui.View):
         roster = g.get("roster", {})
         if str(interaction.user.id) not in roster:
             return await interaction.response.send_message("⚠️ You are not in the roster and cannot claim.", ephemeral=True)
+
         self.claimer_id = interaction.user.id
-        await interaction.response.send_message(f"Ticket claimed by {interaction.user.mention}.", ephemeral=False)
+
+        # Rename channel: 000-opener-claimer
+        meta = self.cog.channel_meta.get(str(interaction.channel.id), {})
+        opener_slug = meta.get("opener_slug", "user")
+        claimer_slug = slugify(interaction.user.display_name or interaction.user.name)
+        ticket_no = meta.get("ticket_number", 0)
+        new_name = f"{ticket_no:03d}-{opener_slug}-{claimer_slug}"
+
+        try:
+            if interaction.channel.name != new_name:
+                await interaction.channel.edit(name=new_name)
+        except discord.HTTPException:
+            pass  # ignore rename failures (e.g., missing perms)
+
+        # Persist the claimer info
+        meta["claimer_id"] = self.claimer_id
+        meta["claimer_slug"] = claimer_slug
+        self.cog.channel_meta[str(interaction.channel.id)] = meta
+        save_config(self.cog.config)
+
+        await interaction.response.send_message(f"Ticket claimed by {interaction.user.mention}.")
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, emoji="🔒", custom_id="ticket:close", row=0)
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -332,22 +346,25 @@ class ReviewView(discord.ui.View):
         return True
 
     async def _finalize(self, interaction: discord.Interaction, positive: bool):
-        await self.cog.record_review(self.guild_id, self.staff_id, positive)
-        for child in self.children:
-            child.disabled = True
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌",
-                ephemeral=True
-            )
-        else:
-            await interaction.channel.send(
-                "Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌",
-                delete_after=5
-            )
-        if interaction.message:
-            await interaction.message.edit(view=self)
+        await self.cog.record_review(interaction.guild.id, self.staff_id, positive=positive)
+        self._used = True
 
+        # disable buttons
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        try:
+            if interaction.message:
+                await interaction.message.edit(view=self)
+        except discord.HTTPException:
+            pass
+
+        # respond safely (avoid Unknown Webhook)
+        text = "Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌"
+        if not interaction.response.is_done():
+            await interaction.response.send_message(text, ephemeral=True)
+        else:
+            await interaction.channel.send(text, delete_after=5)
 
     @discord.ui.button(emoji="👍", style=discord.ButtonStyle.success, custom_id="ticket:review_up")
     async def thumbs_up(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -360,7 +377,7 @@ class ReviewView(discord.ui.View):
         if not await self._guard(interaction):
             return
         await self._finalize(interaction, positive=False)
-
+        
 # ---------------- Cog ----------------
 class TicketCog(commands.Cog):
     def __init__(self, bot):
@@ -409,46 +426,4 @@ class TicketCog(commands.Cog):
         else:
             for uid, data in roster.items():
                 total = data["good"] + data["bad"]
-                if total > 0:
-                    percent = (data["good"] / total) * 100
-                    rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
-                else:
-                    rating = "No reviews yet"
-                embed.add_field(name=data["name"], value=rating, inline=False)
-        return embed
-
-    async def record_review(self, guild_id: int, staff_id: int, positive: bool):
-        g = self.config.setdefault(str(guild_id), {})
-        roster = g.setdefault("roster", {})
-        entry = roster.setdefault(str(staff_id), {"name": "Unknown", "good": 0, "bad": 0})
-        if positive:
-            entry["good"] += 1
-        else:
-            entry["bad"] += 1
-        save_config(self.config)
-
-    async def autopost_loop(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            await asyncio.sleep(60)
-
-    @app_commands.command(name="ticket_setup", description="Create a ticket panel")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def ticket_setup(self, interaction: discord.Interaction, panel_name: str):
-        view = TicketSetupView(self, interaction.guild, panel_name)
-        await interaction.response.send_message(
-            f"Configuring panel `{panel_name}` — choose options below:", view=view, ephemeral=True
-        )
-
-    async def cog_load(self):
-        # Restore persistent views
-        for gid, gdata in self.config.items():
-            if gid == "_channel_meta":
-                continue
-            for panel_name in gdata.get("panels", {}):
-                self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
-        self.bot.add_view(TicketChannelView(0, self, None, None, 0))
-        self.bot.add_view(ReviewView(self, None, 0, 0, None))
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(TicketCog(bot))
+                if total 
