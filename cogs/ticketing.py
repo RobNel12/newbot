@@ -275,7 +275,7 @@ class TicketChannelView(discord.ui.View):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
 
-        transcript_html = await chat_exporter.quick_export(channel, limit=None)
+        transcript_html = await chat_exporter.quick_export(channel)
         file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=f"ticket_{self.cog.channel_meta[str(channel.id)]['ticket_number']:03d}.html")
         transcript_url = None
         if self.log_channel:
