@@ -332,16 +332,22 @@ class ReviewView(discord.ui.View):
         return True
 
     async def _finalize(self, interaction: discord.Interaction, positive: bool):
-        await self.cog.record_review(interaction.guild.id, self.staff_id, positive=positive)
-        self._used = True
+        await self.cog.record_review(self.guild_id, self.staff_id, positive)
         for child in self.children:
-            if isinstance(child, discord.ui.Button):
-                child.disabled = True
-        try:
+            child.disabled = True
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌",
+                ephemeral=True
+            )
+        else:
+            await interaction.channel.send(
+                "Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌",
+                delete_after=5
+            )
+        if interaction.message:
             await interaction.message.edit(view=self)
-        except discord.HTTPException:
-            pass
-        await interaction.followup.send("Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌", ephemeral=True)
+
 
     @discord.ui.button(emoji="👍", style=discord.ButtonStyle.success, custom_id="ticket:review_up")
     async def thumbs_up(self, interaction: discord.Interaction, button: discord.ui.Button):
