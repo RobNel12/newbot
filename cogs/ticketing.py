@@ -280,58 +280,42 @@ class TicketChannelView(discord.ui.View):
                     overwrites[target] = perms
         await channel.edit(overwrites=overwrites)
 
-    async def _log_and_delete(self, channel: discord.TextChannel, deleted_by: discord.Member):
-        # Count human participants (skip obvious bot/system prompts)
-        counts: Dict[int, int] = {}
-        async for msg in channel.history(limit=None, oldest_first=True):
-            if msg.author.bot:
-                lc = (msg.content or "").lower()
-                if any(s in lc for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
-                    continue
-            counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
-
-        # Export transcript (compat with different chat_exporter versions)
+    async def _log_and_delete(self, channel: discord.TextChannel, closer: discord.User):
+        
+        # Export full transcript (handle versions of chat_exporter)
         try:
             transcript_html = await chat_exporter.quick_export(channel, limit=None)
         except TypeError:
             transcript_html = await chat_exporter.quick_export(channel)
 
-        meta = self.cog.channel_meta.get(str(channel.id), {})
-        ticket_no = meta.get("ticket_number", 0)
-        fname = f"transcript-{ticket_no:03d}-{channel.name.split('-', 1)[-1]}.html"
-        file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=fname)
+        if transcript_html is None:
+            await channel.delete()
+            return
 
-        # Build log embed
-        opener = channel.guild.get_member(meta.get("opener_id", 0))
-        embed = discord.Embed(
-            title=f"Ticket #{meta.get('ticket_number', 0):03d} in {meta.get('panel_name','?')}!",
-            color=discord.Color.blurple(),
-            timestamp=discord.utils.utcnow(),
+        # Convert HTML string into a file object
+        transcript_file = discord.File(
+            io.BytesIO(transcript_html.encode()),
+            filename=f"{channel.name}.html"
         )
-        embed.add_field(name="Created by", value=(opener.mention if opener else f"<@{meta.get('opener_id')}>"), inline=True)
-        embed.add_field(name="Deleted by", value=deleted_by.mention, inline=True)
 
-        if counts:
-            lines = []
-            for uid, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]:
-                mem = channel.guild.get_member(uid)
-                name = mem.mention if mem else f"<@{uid}>"
-                lines.append(f"{c} messages by {name}")
-            embed.add_field(name="Participants", value="\n".join(lines), inline=False)
+        # Build embed for the log
+        embed = discord.Embed(
+            title="🗑️ Ticket Deleted",
+            description=f"Ticket `{channel.name}` deleted by {closer.mention}",
+            color=discord.Color.red()
+        )
 
-        # Send transcript ONLY to configured log channel
-        if self.log_channel:
-            sent = await self.log_channel.send(file=file)
-            transcript_url = sent.attachments[0].url if sent.attachments else None
+        # Look up configured log channel
+        g = self.cog.config.get(str(channel.guild.id), {})
+        log_channel_id = g.get("log_channel")
+        log_channel = channel.guild.get_channel(log_channel_id) if log_channel_id else None
 
-            view = None
-            if transcript_url:
-                view = discord.ui.View()
-                view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
-            await self.log_channel.send(embed=embed, view=view)
+        if log_channel:
+            await log_channel.send(embed=embed, file=transcript_file)
 
-        # Finally delete the channel
+        # Finally, delete the ticket channel
         await channel.delete()
+
 
 
 # ---------------- Review ----------------
