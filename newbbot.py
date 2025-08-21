@@ -26,21 +26,22 @@ class ModBot(commands.Bot):
         )
 
     async def setup_hook(self):
+        # Load cogs
         await self.load_extension("cogs.ticketing")
         await self.load_extension("cogs.moderation")
 
-        dev_guild = discord.Object(id=1304124705896136744)  # your server
+        # Do a global sync at startup (takes up to an hour to propagate)
+        await self.tree.sync()
+        logging.info("App commands synced globally.")
 
-        # Copy all global app commands (from your cogs) into the guild,
-        # then sync that guild for instant availability.
-        self.tree.copy_global_to(guild=dev_guild)
-        await self.tree.sync(guild=dev_guild)
-
-        # (Optional) Later, when you're ready to roll out globally, run:
-        # await self.tree.sync()
-
-        logging.info("App commands synced to dev guild.")
-
+# Owner-only command to instantly sync with a specific guild
+@commands.is_owner()
+@bot.command(name="syncguild")
+async def sync_guild(ctx, guild_id: int):
+    guild = discord.Object(id=guild_id)
+    bot.tree.copy_global_to(guild=guild)
+    synced = await bot.tree.sync(guild=guild)
+    await ctx.send(f"✅ Synced {len(synced)} commands to guild `{guild_id}`")
 
 async def main():
     load_dotenv()
