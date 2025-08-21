@@ -27,7 +27,9 @@ class ModBot(commands.Bot):
 
     async def setup_hook(self):
         await self.load_extension("cogs.ticketing")
+        print("[ticketing] cog loaded")
         await self.load_extension("cogs.moderation")
+        print("[moderation] cog loaded")
 
 
         # Global sync. For instant dev sync to a single guild, uncomment the next 2 lines:
