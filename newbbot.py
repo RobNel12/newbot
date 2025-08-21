@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 
+DEV_GUILDS = [1304124705896136744]
+
 # ---------- Logging ----------
 logging.basicConfig(
     level=logging.INFO,
@@ -25,15 +27,21 @@ class ModBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        # Load your cogs
+        # Load cogs
         await self.load_extension("cogs.ticketing")
         await self.load_extension("cogs.moderation")
 
-        # Global sync at startup (slower, ~1h to propagate but avoids duplicates)
+        # Global sync (slower rollout, ~1h but necessary for all guilds)
         await self.tree.sync()
         logging.info("App commands synced globally.")
 
-# Instantiate bot
+        # Instant sync for dev guilds (optional)
+        for gid in DEV_GUILDS:
+            guild = discord.Object(id=gid)
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            logging.info(f"Instant-synced {len(synced)} commands to guild {gid}")
+
 bot = ModBot()
 
 # ---------------- Utility Slash Command ----------------
@@ -59,22 +67,8 @@ async def syncguild(interaction: discord.Interaction, guild_id: str):
 # -------------------------------------------------------
 
 async def main():
-    load_dotenv()
-    token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        raise RuntimeError("Missing DISCORD_TOKEN in .env")
-
-    bot = ModBot()
-
-    @bot.event
-    async def on_ready():
-        logging.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
-        logging.info(f"Guilds: {[g.name for g in bot.guilds]}")
-
-    await bot.start(token)
+    async with bot:
+        await bot.start(os.environ["DISCORD_TOKEN"])
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    asyncio.run(main())
