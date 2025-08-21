@@ -17,7 +17,6 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 
-# ---------- Bot ----------
 class ModBot(commands.Bot):
     def __init__(self):
         super().__init__(
@@ -26,22 +25,38 @@ class ModBot(commands.Bot):
         )
 
     async def setup_hook(self):
-        # Load cogs
+        # Load your cogs
         await self.load_extension("cogs.ticketing")
         await self.load_extension("cogs.moderation")
 
-        # Do a global sync at startup (takes up to an hour to propagate)
+        # Global sync at startup (slower, ~1h to propagate but avoids duplicates)
         await self.tree.sync()
         logging.info("App commands synced globally.")
 
-# Owner-only command to instantly sync with a specific guild
-@commands.is_owner()
-@bot.command(name="syncguild")
-async def sync_guild(ctx, guild_id: int):
-    guild = discord.Object(id=guild_id)
-    bot.tree.copy_global_to(guild=guild)
-    synced = await bot.tree.sync(guild=guild)
-    await ctx.send(f"✅ Synced {len(synced)} commands to guild `{guild_id}`")
+# Instantiate bot
+bot = ModBot()
+
+# ---------------- Utility Slash Command ----------------
+@bot.tree.command(name="syncguild", description="Owner only: instantly sync app commands to a guild ID.")
+async def syncguild(interaction: discord.Interaction, guild_id: str):
+    # Verify owner
+    app_info = await bot.application_info()
+    if interaction.user.id != app_info.owner.id:
+        return await interaction.response.send_message("❌ You are not the bot owner.", ephemeral=True)
+
+    try:
+        gid = int(guild_id)
+        guild = discord.Object(id=gid)
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        await interaction.response.send_message(
+            f"✅ Synced **{len(synced)}** commands to guild `{gid}`.",
+            ephemeral=True
+        )
+    except Exception as e:
+        await interaction.response.send_message(f"⚠️ Sync failed: `{e}`", ephemeral=True)
+
+# -------------------------------------------------------
 
 async def main():
     load_dotenv()
