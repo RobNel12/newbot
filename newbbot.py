@@ -5,8 +5,7 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 
-DEV_GUILDS = [1304124705896136744,1370865043742261320]
-
+DEV_GUILDS = [1304124705896136744]
 # ---------- Logging ----------
 logging.basicConfig(
     level=logging.INFO,
