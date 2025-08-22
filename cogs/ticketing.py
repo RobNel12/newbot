@@ -1,7 +1,7 @@
 import discord, json, os, asyncio, datetime, io
 from discord.ext import commands
 from discord import app_commands
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict
 import chat_exporter
 
 CONFIG_FILE = "ticket_config.json"
@@ -129,19 +129,6 @@ class TicketPanelView(discord.ui.View):
         self.guild_id = str(guild_id)
         self.panel_name = panel_name
 
-    def _get_log_channel(self, guild: discord.Guild) -> Optional[discord.TextChannel]:
-        # Prefer the view’s bound log_channel
-        if isinstance(self.log_channel, discord.TextChannel):
-            return self.log_channel
-    
-        # Fallback: look up the panel’s configured log channel
-        meta = self.cog.channel_meta.get(str(self.channel_id), {})
-        panel = meta.get("panel_name")
-        gconf = self.cog.config.get(str(guild.id), {})
-        panel_cfg = gconf.get("panels", {}).get(panel, {})
-        chan_id = panel_cfg.get("log_channel")
-        return guild.get_channel(chan_id) if chan_id else None
-
     @discord.ui.button(label="Open Ticket", style=discord.ButtonStyle.blurple, emoji="🎫", custom_id="ticket:open")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg = self.cog.config.get(self.guild_id, {}).get("panels", {}).get(self.panel_name)
@@ -177,13 +164,13 @@ class TicketPanelView(discord.ui.View):
         self.cog.channel_meta[str(channel.id)] = {
             "ticket_number": ticket_number,
             "panel_name": self.panel_name,
+            "panel_channel_id": interaction.channel.id,  # where the panel lives
             "opener_id": interaction.user.id,
             "opener_slug": opener_slug,
             "opened_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
         }
         save_config(self.cog.config)
 
-        # No "ticket opened" log (per request)
         log_channel = guild.get_channel(cfg["log_channel"])
 
         await channel.send(
@@ -197,7 +184,6 @@ class TicketPanelView(discord.ui.View):
             )
         )
         await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
-
 
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
@@ -294,7 +280,7 @@ class TicketChannelView(discord.ui.View):
         await channel.edit(overwrites=overwrites)
 
     async def _log_and_delete(self, channel: discord.TextChannel, deleted_by: discord.Member):
-    # Count human participants (skip obvious bot/system prompts)
+        # Count human participants (skip obvious bot/system prompts)
         counts: Dict[int, int] = {}
         async for msg in channel.history(limit=None, oldest_first=True):
             if msg.author.bot:
@@ -302,58 +288,72 @@ class TicketChannelView(discord.ui.View):
                 if any(s in lc for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
-    
-        # Export transcript (compat with chat_exporter versions)
+
+        # Export transcript
         try:
             transcript_html = await chat_exporter.quick_export(channel, limit=None)
         except TypeError:
             transcript_html = await chat_exporter.quick_export(channel)
-    
-        # Resolve the logs channel directly
+
+        # Resolve the logs channel directly from panel config
         meta = self.cog.channel_meta.get(str(channel.id), {})
         panel_name = meta.get("panel_name")
         gconf = self.cog.config.get(str(channel.guild.id), {})
         panel_cfg = gconf.get("panels", {}).get(panel_name, {}) if panel_name else {}
         logs_id = panel_cfg.get("log_channel")
         logs = channel.guild.get_channel(logs_id) if logs_id else None
-    
+
         # If we can't find a logs channel, just delete and bail
         if not logs or not transcript_html:
             await channel.delete()
             return
-    
+
         # Build filename like transcript-000-opener[-claimer].html
         ticket_no = meta.get("ticket_number", 0)
         fname = f"transcript-{ticket_no:03d}-{channel.name.split('-', 1)[-1]}.html"
         f = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=fname)
-    
-        # Prepare members
+
+        # Prepare members and times
         opener = channel.guild.get_member(meta.get("opener_id", 0))
         opener_display = opener.mention if opener else f"<@{meta.get('opener_id')}>"
-    
-        claimer_ids = meta.get("claimers", [])
-        if isinstance(claimer_ids, int):  # single stored as int
-            claimer_ids = [claimer_ids]
-        claimers_display = (
-            ", ".join(
-                (channel.guild.get_member(cid).mention if channel.guild.get_member(cid) else f"<@{cid}>")
-                for cid in claimer_ids
-            )
-            if claimer_ids else "None"
-        )
-    
+
+        claimer_id = meta.get("claimer_id")
+        if claimer_id:
+            m = channel.guild.get_member(claimer_id)
+            claimers_display = m.mention if m else f"<@{claimer_id}>"
+        else:
+            claimers_display = "None"
+
         closer_display = deleted_by.mention if deleted_by else "Unknown"
-    
-        # Build embed
+
+        # Opened/deleted relative times
+        opened_at = meta.get("opened_at")
+        try:
+            opened_dt = datetime.datetime.fromisoformat(opened_at)
+        except Exception:
+            opened_dt = None
+        created_rel = discord.utils.format_dt(opened_dt, "R") if opened_dt else "some time ago"
+        deleted_rel = discord.utils.format_dt(discord.utils.utcnow(), "R")
+
+        # Panel message channel mention for "Type"
+        panel_chan = channel.guild.get_channel(meta.get("panel_channel_id", 0))
+        panel_where = panel_chan.mention if panel_chan else "#unknown"
+
+        # Upload the transcript file to logs first
+        sent = await logs.send(file=f)
+        transcript_url = sent.attachments[0].url if sent.attachments else None
+
+        # Build embed to look like your example
         embed = discord.Embed(
-            title=f"Ticket #{meta.get('ticket_number', 0):03d} in {meta.get('panel_name', '?')}!",
+            title=f"Ticket #{ticket_no:03d} in {panel_name.title() if panel_name else '?'}!",
             color=discord.Color.blurple(),
             timestamp=discord.utils.utcnow(),
         )
-        embed.add_field(name="Opened by", value=opener_display, inline=True)
-        embed.add_field(name="Closed by", value=closer_display, inline=True)
+        embed.add_field(name="Type", value=f"from **{panel_name.title() if panel_name else '?'}** in {panel_where}", inline=False)
+        embed.add_field(name="Created by", value=f"{opener_display} {created_rel}", inline=True)
+        embed.add_field(name="Deleted by", value=f"{closer_display} {deleted_rel}", inline=True)
         embed.add_field(name="Claimed by", value=claimers_display, inline=False)
-    
+
         if counts:
             lines = []
             for uid, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]:
@@ -361,20 +361,15 @@ class TicketChannelView(discord.ui.View):
                 name = mem.mention if mem else f"<@{uid}>"
                 lines.append(f"{c} messages by {name}")
             embed.add_field(name="Participants", value="\n".join(lines), inline=False)
-    
-        # Send the transcript file only to the logs channel
-        sent = await logs.send(file=f)
-        
-        # If we got an attachment URL back, add it as a button on the embed
-        transcript_url = sent.attachments[0].url if sent.attachments else None
+
         view = None
         if transcript_url:
             view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
-        
-        # Now send the embed (without duplicating the file) into the logs channel
+
+        # Send the embed (no duplicate file) to the logs channel
         await logs.send(embed=embed, view=view)
-        
+
         # Finally delete the ticket channel itself
         await channel.delete()
 
@@ -412,7 +407,6 @@ class ReviewView(discord.ui.View):
         except discord.HTTPException:
             pass
 
-        # respond safely (avoid Unknown Webhook)
         text = "Thanks for your feedback! ✅" if positive else "Thanks for your feedback! ❌"
         if not interaction.response.is_done():
             await interaction.response.send_message(text, ephemeral=True)
@@ -431,17 +425,13 @@ class ReviewView(discord.ui.View):
             return
         await self._finalize(interaction, positive=False)
 
-
 # ---------------- Cog (tail) ----------------
 class TicketCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # create/load config early so cog_load can use it
         self.config: Dict[str, Dict] = load_config()
-        # nested store for per-channel metadata
         self.channel_meta: Dict[str, Dict] = self.config.setdefault("_channel_meta", {})
         save_config(self.config)
-        # optional background task
         self._autopost_task = self.bot.loop.create_task(self.autopost_loop())
 
     # ---------- Roster commands ----------
@@ -515,20 +505,16 @@ class TicketCog(commands.Cog):
 
     # ---------- Persistent views ----------
     async def cog_load(self):
-        # Ensure config exists if something recreated the Cog without __init__ (defensive)
         if not hasattr(self, "config") or self.config is None:
             self.config = load_config()
             self.channel_meta = self.config.setdefault("_channel_meta", {})
-        # Restore panel views
         for gid, gdata in list(self.config.items()):
             if gid == "_channel_meta":
                 continue
             for panel_name in gdata.get("panels", {}):
                 self.bot.add_view(TicketPanelView(self, int(gid), panel_name))
-        # Register persistent action views
         self.bot.add_view(TicketChannelView(0, self, None, None, 0))
         self.bot.add_view(ReviewView(self, None, 0, 0, None))
-
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(TicketCog(bot))
