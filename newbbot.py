@@ -7,8 +7,6 @@ from discord.ext import commands
 
 load_dotenv()
 
-DEV_GUILDS = [1304124705896136744]
-
 # ---------- Logging ----------
 logging.basicConfig(
     level=logging.INFO,
@@ -36,13 +34,6 @@ class ModBot(commands.Bot):
         # Global sync (slower rollout, ~1h but necessary for all guilds)
         await self.tree.sync()
         logging.info("App commands synced globally.")
-
-        # Instant sync for dev guilds (optional)
-        for gid in DEV_GUILDS:
-            guild = discord.Object(id=gid)
-            self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            logging.info(f"Instant-synced {len(synced)} commands to guild {gid}")
 
 bot = ModBot()
 
