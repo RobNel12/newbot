@@ -232,7 +232,7 @@ class TicketChannelView(discord.ui.View):
             return await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
         await self._lock_channel(interaction.channel, lock=True)
         self.closed = True
-        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.")
+        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=True)
 
         claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
         opener = interaction.guild.get_member(self.opener_id)
@@ -249,7 +249,7 @@ class TicketChannelView(discord.ui.View):
             return await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
         await self._lock_channel(interaction.channel, lock=False)
         self.closed = False
-        await interaction.response.send_message("🔓 Ticket reopened.")
+        await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=True)
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket:delete", row=0)
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -266,8 +266,8 @@ class TicketChannelView(discord.ui.View):
         if not allowed:
             return await interaction.response.send_message("You don't have permission to delete this ticket.", ephemeral=True)
 
-        await interaction.response.send_message("Archiving and deleting ticket in 5 seconds…")
-        await asyncio.sleep(5)
+        await interaction.response.send_message("Archiving and deleting ticket…", ephemeral=True)
+        await asyncio.sleep(1)
         await self._log_and_delete(interaction.channel, interaction.user)
 
     async def _lock_channel(self, channel: discord.TextChannel, lock: bool):
@@ -289,12 +289,6 @@ class TicketChannelView(discord.ui.View):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
 
-        # Export transcript
-        try:
-            transcript_html = await chat_exporter.quick_export(channel, limit=None)
-        except TypeError:
-            transcript_html = await chat_exporter.quick_export(channel)
-
         # Resolve the logs channel directly from panel config
         meta = self.cog.channel_meta.get(str(channel.id), {})
         panel_name = meta.get("panel_name")
@@ -304,14 +298,23 @@ class TicketChannelView(discord.ui.View):
         logs = channel.guild.get_channel(logs_id) if logs_id else None
 
         # If we can't find a logs channel, just delete and bail
-        if not logs or not transcript_html:
+        if not logs:
             await channel.delete()
             return
+
+        # Export transcript HTML (DO NOT send to current channel)
+        transcript_html = await chat_exporter.export(
+            channel,
+            limit=None,
+            bot=self.cog.bot,  # helps with avatars/emojis/time formatting
+        )
+        if not transcript_html:
+            transcript_html = "<html><body><p>No transcript available.</p></body></html>"
 
         # Build filename like transcript-000-opener[-claimer].html
         ticket_no = meta.get("ticket_number", 0)
         fname = f"transcript-{ticket_no:03d}-{channel.name.split('-', 1)[-1]}.html"
-        f = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=fname)
+        transcript_file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=fname)
 
         # Prepare members and times
         opener = channel.guild.get_member(meta.get("opener_id", 0))
@@ -339,11 +342,11 @@ class TicketChannelView(discord.ui.View):
         panel_chan = channel.guild.get_channel(meta.get("panel_channel_id", 0))
         panel_where = panel_chan.mention if panel_chan else "#unknown"
 
-        # Upload the transcript file to logs first
-        sent = await logs.send(file=f)
+        # Upload the transcript file to LOGS channel
+        sent = await logs.send(file=transcript_file)
         transcript_url = sent.attachments[0].url if sent.attachments else None
 
-        # Build embed to look like your example
+        # Build embed to match your example
         embed = discord.Embed(
             title=f"Ticket #{ticket_no:03d} in {panel_name.title() if panel_name else '?'}!",
             color=discord.Color.blurple(),
@@ -444,7 +447,7 @@ class TicketCog(commands.Cog):
             return await interaction.response.send_message("⚠️ That member is already in the roster.", ephemeral=True)
         roster[str(member.id)] = {"name": member.display_name, "good": 0, "bad": 0}
         save_config(self.config)
-        await interaction.response.send_message(f"✅ Added {member.mention} to the roster.")
+        await interaction.response.send_message(f"✅ Added {member.mention} to the roster.", ephemeral=True)
 
     @app_commands.command(name="ticket_roster_remove", description="Remove a member from the roster")
     @app_commands.checks.has_permissions(administrator=True)
@@ -454,7 +457,7 @@ class TicketCog(commands.Cog):
         if roster.pop(str(member.id), None) is None:
             return await interaction.response.send_message("⚠️ That member is not in the roster.", ephemeral=True)
         save_config(self.config)
-        await interaction.response.send_message(f"❌ Removed {member.mention} from the roster.")
+        await interaction.response.send_message(f"❌ Removed {member.mention} from the roster.", ephemeral=True)
 
     @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
     async def roster_view(self, interaction: discord.Interaction):
