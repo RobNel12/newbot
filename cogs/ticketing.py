@@ -476,7 +476,7 @@ class TicketCog(commands.Cog):
     def build_roster_embed(self, guild_id: int) -> discord.Embed:
         g = self.config.get(str(guild_id), {})
         roster = g.get("roster", {})
-        embed = discord.Embed(title="🎟️ Ticket Staff Roster", color=discord.Color.gold(), timestamp=discord.utils.utcnow())
+        embed = discord.Embed(title="🎟️ Coaching Roster", color=discord.Color.gold(), timestamp=discord.utils.utcnow())
         embed.set_footer(text="Last updated")
         if not roster:
             embed.description = "No one in roster."
