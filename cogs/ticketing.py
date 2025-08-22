@@ -237,7 +237,7 @@ class TicketChannelView(discord.ui.View):
         claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
         opener = interaction.guild.get_member(self.opener_id)
         await interaction.channel.send(
-            {opener.mention} + f", please leave a review for {claimer.mention}:",
+            f"{opener.mention}" + f", please leave a review for {claimer.mention}:",
             view=ReviewView(self.cog, self.log_channel, opener_id=self.opener_id,
                             staff_id=claimer.id if isinstance(claimer, discord.Member) else interaction.user.id,
                             log_msg=self.log_msg)
