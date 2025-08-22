@@ -430,6 +430,7 @@ class ReviewView(discord.ui.View):
 
 # ---------------- Cog (tail) ----------------
 class TicketCog(commands.Cog):
+    
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.config: Dict[str, Dict] = load_config()
@@ -482,6 +483,82 @@ class TicketCog(commands.Cog):
                 embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
         return embed
 
+    # ---------- Auto Roster Posting ----------
+    @app_commands.command(name="ticket_roster_autopost_set", description="Set up auto-posting roster updates")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def roster_autopost_set(self, interaction: discord.Interaction, channel: discord.TextChannel, interval_minutes: Optional[int] = 60):
+        g = self.config.setdefault(str(interaction.guild.id), {})
+        g["roster_autopost"] = {
+            "channel_id": channel.id,
+            "message_id": None,
+            "interval": interval_minutes
+        }
+        save_config(self.config)
+        await interaction.response.send_message(
+            f"✅ Auto roster posting enabled in {channel.mention} every {interval_minutes} minutes.",
+            ephemeral=True
+        )
+        await self.update_roster_message(interaction.guild.id)
+
+    @app_commands.command(name="ticket_roster_autopost_disable", description="Disable auto roster posting")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def roster_autopost_disable(self, interaction: discord.Interaction):
+        g = self.config.setdefault(str(interaction.guild.id), {})
+        g.pop("roster_autopost", None)
+        save_config(self.config)
+        await interaction.response.send_message("❌ Auto roster posting disabled.", ephemeral=True)
+
+    @app_commands.command(name="ticket_roster_autopost_now", description="Force refresh the auto roster message")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def roster_autopost_now(self, interaction: discord.Interaction):
+        await self.update_roster_message(interaction.guild.id, force_new=True)
+        await interaction.response.send_message("🔄 Roster message refreshed.", ephemeral=True)
+
+    async def update_roster_message(self, guild_id: int, force_new: bool = False):
+        g = self.config.get(str(guild_id), {})
+        auto = g.get("roster_autopost")
+        if not auto:
+            return
+
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+        channel = guild.get_channel(auto.get("channel_id"))
+        if not channel:
+            return
+
+        embed = self.build_roster_embed(guild_id)
+
+        msg: Optional[discord.Message] = None
+        if not force_new and auto.get("message_id"):
+            try:
+                msg = await channel.fetch_message(auto["message_id"])
+                await msg.edit(embed=embed)
+                return
+            except Exception:
+                pass
+
+        # Post new message if missing/failed
+        sent = await channel.send(embed=embed)
+        auto["message_id"] = sent.id
+        save_config(self.config)
+
+    async def autopost_loop(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            try:
+                for gid, g in list(self.config.items()):
+                    if gid == "_channel_meta":
+                        continue
+                    auto = g.get("roster_autopost")
+                    if auto:
+                        interval = auto.get("interval", 60)
+                        await self.update_roster_message(int(gid))
+                await asyncio.sleep(60)  # check once a minute
+            except Exception as e:
+                log.exception("Error in autopost loop: %s", e)
+                await asyncio.sleep(60)
+
     async def record_review(self, guild_id: int, staff_id: int, positive: bool):
         g = self.config.setdefault(str(guild_id), {})
         roster = g.setdefault("roster", {})
@@ -492,10 +569,8 @@ class TicketCog(commands.Cog):
             entry["bad"] += 1
         save_config(self.config)
 
-    async def autopost_loop(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            await asyncio.sleep(60)
+        await self.update_roster_message(guild_id)
+
 
     # ---------- Panel setup ----------
     @app_commands.command(name="ticket_setup", description="Create a ticket panel")
