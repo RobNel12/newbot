@@ -45,14 +45,17 @@ async def syncguild(interaction: discord.Interaction):
     if interaction.user.id != app_info.owner.id:
         return await interaction.response.send_message("❌ You are not the bot owner.", ephemeral=True)
 
+    await interaction.response.defer(ephemeral=True)  # acknowledge immediately
+
     try:
-        synced = await bot.tree.sync()  # Global sync only
-        await interaction.response.send_message(
+        synced = await bot.tree.sync()  # Global sync
+        await interaction.followup.send(
             f"✅ Globally synced **{len(synced)}** commands.",
             ephemeral=True
         )
     except Exception as e:
-        await interaction.response.send_message(f"⚠️ Sync failed: `{e}`", ephemeral=True)
+        await interaction.followup.send(f"⚠️ Sync failed: `{e}`", ephemeral=True)
+
 
 # -------------------------------------------------------
 
