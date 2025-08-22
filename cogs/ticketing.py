@@ -234,13 +234,21 @@ class TicketChannelView(discord.ui.View):
         self.closed = True
         await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=True)
 
-        claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
         opener = interaction.guild.get_member(self.opener_id)
+        opener_display = opener.mention if opener else f"<@{self.opener_id}>"
+        
+        claimer_member = interaction.guild.get_member(self.claimer_id) or interaction.user
+        claimer_display = claimer_member.mention
+        
         await interaction.channel.send(
-            f"{opener.mention}" + f", please leave a review for {claimer.mention}:",
-            view=ReviewView(self.cog, self.log_channel, opener_id=self.opener_id,
-                            staff_id=claimer.id if isinstance(claimer, discord.Member) else interaction.user.id,
-                            log_msg=self.log_msg)
+            f"{opener_display}, please leave a review for {claimer_display}:",
+            view=ReviewView(
+                self.cog,
+                self.log_channel,
+                opener_id=self.opener_id,
+                staff_id=claimer_member.id,
+                log_msg=self.log_msg
+            )
         )
 
     @discord.ui.button(label="Reopen", style=discord.ButtonStyle.success, emoji="🔓", custom_id="ticket:reopen", row=0)
