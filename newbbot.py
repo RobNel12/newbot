@@ -47,20 +47,17 @@ class ModBot(commands.Bot):
 bot = ModBot()
 
 # ---------------- Utility Slash Command ----------------
-@bot.tree.command(name="syncguild", description="Owner only: instantly sync app commands to a guild ID.")
-async def syncguild(interaction: discord.Interaction, guild_id: str):
+@bot.tree.command(name="syncguild", description="Owner only: instantly sync app commands globally.")
+async def syncguild(interaction: discord.Interaction):
     # Verify owner
     app_info = await bot.application_info()
     if interaction.user.id != app_info.owner.id:
         return await interaction.response.send_message("❌ You are not the bot owner.", ephemeral=True)
 
     try:
-        gid = int(guild_id)
-        guild = discord.Object(id=gid)
-        bot.tree.copy_global_to(guild=guild)
-        synced = await bot.tree.sync(guild=guild)
+        synced = await bot.tree.sync()  # Global sync only
         await interaction.response.send_message(
-            f"✅ Synced **{len(synced)}** commands to guild `{gid}`.",
+            f"✅ Globally synced **{len(synced)}** commands.",
             ephemeral=True
         )
     except Exception as e:
