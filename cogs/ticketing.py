@@ -185,6 +185,81 @@ class TicketPanelView(discord.ui.View):
         )
         await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
 
+# ---------------- Feedback Modal ----------------
+class FeedbackModal(discord.ui.Modal, title="Send feedback to the opener"):
+    def __init__(self, cog: "TicketCog", opener_id: int, claimer_id: int, channel: discord.TextChannel):
+        super().__init__(timeout=300)
+        self.cog = cog
+        self.opener_id = opener_id
+        self.claimer_id = claimer_id
+        self.channel = channel
+
+        self.feedback = discord.ui.TextInput(
+            label="Your feedback",
+            placeholder="Type your message to the opener…",
+            style=discord.TextStyle.paragraph,
+            min_length=5,
+            max_length=2000,
+            required=True,
+        )
+        self.add_item(self.feedback)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Pull ticket meta
+        meta = self.cog.channel_meta.get(str(self.channel.id), {})
+        ticket_no = meta.get("ticket_number", 0)
+        panel_name = meta.get("panel_name", "?")
+
+        opener = interaction.guild.get_member(self.opener_id)
+        claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
+
+        embed = discord.Embed(
+            title=f"New feedback from your ticket claimer",
+            description=self.feedback.value,
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+        embed.add_field(name="Ticket", value=f"#{ticket_no:03d} ({panel_name})", inline=True)
+        embed.add_field(name="From", value=claimer.mention if claimer else f"<@{self.claimer_id}>", inline=True)
+        embed.add_field(name="Channel", value=self.channel.mention, inline=False)
+
+        dm_ok = False
+        if opener:
+            try:
+                await opener.send(embed=embed)
+                dm_ok = True
+            except Exception:
+                dm_ok = False
+
+        # Also mirror to logs channel (if configured), so staff see an audit trail
+        gconf = self.cog.config.get(str(interaction.guild.id), {})
+        panel_cfg = gconf.get("panels", {}).get(panel_name, {}) if panel_name else {}
+        logs = interaction.guild.get_channel(panel_cfg.get("log_channel") or 0)
+        if logs:
+            try:
+                await logs.send(embed=embed)
+            except Exception:
+                pass
+
+        # Persist the "used" flag and disable the button
+        meta["claimer_feedback_sent"] = True
+        self.cog.channel_meta[str(self.channel.id)] = meta
+        save_config(self.cog.config)
+
+        # Disable button on the message that launched this modal
+        try:
+            if interaction.message:
+                for child in interaction.view.children:
+                    if isinstance(child, discord.ui.Button) and child.custom_id == "ticket:feedback":
+                        child.disabled = True
+                await interaction.message.edit(view=interaction.view)
+        except Exception:
+            pass
+
+        note = "✉️ Sent as a DM to the opener." if dm_ok else "⚠️ Could not DM the opener (DMs closed). Logged to the logs channel."
+        await interaction.response.send_message(f"✅ Feedback recorded. {note}", ephemeral=True)
+
+
 # ---------------- Ticket Channel Controls ----------------
 class TicketChannelView(discord.ui.View):
     def __init__(self, opener_id: int, cog: "TicketCog", log_channel: Optional[discord.TextChannel], log_msg: Optional[discord.Message], channel_id: int):
@@ -383,6 +458,25 @@ class TicketChannelView(discord.ui.View):
 
         # Finally delete the ticket channel itself
         await channel.delete()
+
+    @discord.ui.button(label="DM Feedback to Opener", style=discord.ButtonStyle.primary, emoji="✉️", custom_id="ticket:feedback", row=1)
+    async def dm_feedback(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Only the claimer can send feedback
+        if not self.claimer_id or interaction.user.id != self.claimer_id:
+            return await interaction.response.send_message("Only the claimer can send feedback to the opener.", ephemeral=True)
+
+        if not self.closed:
+            return await interaction.response.send_message("Close the ticket before sending feedback to the opener.", ephemeral=True)
+
+
+        # Enforce one-time per ticket
+        meta = self.cog.channel_meta.get(str(interaction.channel.id), {})
+        if meta.get("claimer_feedback_sent"):
+            return await interaction.response.send_message("Feedback for this ticket has already been sent.", ephemeral=True)
+
+        # Show modal
+        modal = FeedbackModal(self.cog, opener_id=self.opener_id, claimer_id=self.claimer_id, channel=interaction.channel)
+        await interaction.response.send_modal(modal)
 
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
