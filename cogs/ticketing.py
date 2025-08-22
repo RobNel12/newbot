@@ -307,7 +307,7 @@ class TicketChannelView(discord.ui.View):
             return await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
         await self._lock_channel(interaction.channel, lock=True)
         self.closed = True
-        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=True)
+        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=False)
 
         opener = interaction.guild.get_member(self.opener_id)
         opener_display = opener.mention if opener else f"<@{self.opener_id}>"
