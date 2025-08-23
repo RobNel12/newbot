@@ -377,17 +377,28 @@ class ApplicationTickets(commands.Cog):
         await interaction.response.send_message(f"{interaction.user.mention} claimed this application.", ephemeral=False)
 
     async def handle_submit(self, interaction: discord.Interaction, opener_id: int):
-        if not isinstance(interaction.channel, discord.TextChannel): return
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return
+    
+        # Only the opener can submit
         if interaction.user.id != opener_id:
             return await interaction.response.send_message("Only the applicant can submit.", ephemeral=True)
+    
+        # Mark submitted
         await self._write_topic(interaction.channel, submitted="1")
+    
+        # Look up the approve role
+        approve_role = self._approve_role(interaction.guild) if interaction.guild else None
+        if not approve_role:
+            return await interaction.response.send_message("No approve role configured.", ephemeral=True)
+    
+        # Notify the approvers (single message, safe allowed mentions)
         allowed = discord.AllowedMentions(roles=True, users=False, everyone=False)
-        pings = []
-        for rid in self._staff_role_ids(interaction.guild):
-            role = interaction.guild.get_role(rid)
-            if role: pings.append(role.mention)
-        await interaction.response.send_message(f"Application submitted! {' '.join(pings) if pings else '@here'}", allowed_mentions=allowed)
-
+        await interaction.channel.send(f"Application submitted! {approve_role.mention}", allowed_mentions=allowed)
+    
+        # Confirmation to the applicant
+        await interaction.response.send_message("Submitted! We’ve notified the approvers.", ephemeral=True)
+    
     async def handle_close(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.channel, discord.TextChannel): return
         if not self._can_close(interaction.user):
