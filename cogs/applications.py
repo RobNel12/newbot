@@ -129,7 +129,7 @@ class TicketView(discord.ui.View):
     async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.handle_approve(interaction, self.opener_id)
 
-    @discord.ui.button(label="Delete & Log", emoji="🗑️", style=discord.ButtonStyle.danger, custom_id="apptickets:delete")
+    @discord.ui.button(label="Delete", emoji="🗑️", style=discord.ButtonStyle.danger, custom_id="apptickets:delete")
     async def delete(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.cog.handle_delete(interaction, self.opener_id)
 
