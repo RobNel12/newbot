@@ -74,11 +74,7 @@ class TicketSetupView(discord.ui.View):
             "delete_roles": self.delete_roles,
             "log_channel": self.log_channel,
         }
-
-        # Persist the global claiming role if chosen here
-        if self.claim_role_id:
-            gdata["claim_role_id"] = self.claim_role_id  # === NEW ===
-
+        
         save_config(self.cog.config)
 
         embed = discord.Embed(
