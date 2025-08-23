@@ -29,6 +29,7 @@ class ModBot(commands.Bot):
     async def setup_hook(self):
         # Load cogs
         await self.load_extension("cogs.ticketing")
+        await self.load_extension("cogs.applications")
 
         # Global sync (slower rollout, ~1h but necessary for all guilds)
         await self.tree.sync()
