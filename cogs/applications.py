@@ -398,6 +398,7 @@ class ApplicationTickets(commands.Cog):
     
         # Confirmation to the applicant
         await interaction.response.send_message("Submitted! We’ve notified the approvers.", ephemeral=True)
+
     
     async def handle_close(self, interaction: discord.Interaction):
         if not interaction.guild or not isinstance(interaction.channel, discord.TextChannel): return
