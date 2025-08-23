@@ -50,13 +50,12 @@ class TicketSetupView(discord.ui.View):
         self.view_roles: List[int] = []
         self.delete_roles: List[int] = []
         self.log_channel: Optional[int] = None
-        self.claim_role_id: Optional[int] = None  # === NEW ===
-
+        
         self.add_item(CategorySelect(self))
         self.add_item(ViewRolesSelect(self))
         self.add_item(DeleteRolesSelect(self))
         self.add_item(LogChannelSelect(self))
-        self.add_item(ClaimRoleSelect(self))  # === NEW ===
+        
 
     @discord.ui.button(label="✅ Save Panel", style=discord.ButtonStyle.green)
     async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
