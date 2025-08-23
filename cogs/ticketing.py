@@ -78,9 +78,9 @@ class TicketSetupView(discord.ui.View):
         save_config(self.cog.config)
 
         embed = discord.Embed(
-            title=f"🎫 Get Personalized {self.panel_name.title()}!",
+            title=f"Get Personalized {self.panel_name.title()}!",
             description="Click below to find somebody willing to help you!",
-            color=discord.Color.gold()
+            color=0xEFA56D
         )
         embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")  # full-size image
 
