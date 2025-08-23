@@ -86,6 +86,8 @@ class TicketSetupView(discord.ui.View):
             description="Click below to open a ticket.",
             color=discord.Color.blurple
         )
+        embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg")  # full-size image
+
         view = TicketPanelView(self.cog, self.guild.id, self.panel_name)
         await interaction.channel.send(embed=embed, view=view)
 
