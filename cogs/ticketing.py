@@ -78,9 +78,9 @@ class TicketSetupView(discord.ui.View):
         save_config(self.cog.config)
 
         embed = discord.Embed(
-            title=f"🎫 {self.panel_name.title()} Tickets",
-            description="Click below to open a ticket.",
-            color=discord.Color.blurple()
+            title=f"🎫 Get Personalized {self.panel_name.title()}!",
+            description="Click below to find somebody willing to help you!",
+            color=discord.Color.gold()
         )
         embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")  # full-size image
 
@@ -141,7 +141,7 @@ class TicketPanelView(discord.ui.View):
         self.guild_id = str(guild_id)
         self.panel_name = panel_name
 
-    @discord.ui.button(label="Open Ticket", style=discord.ButtonStyle.blurple, emoji="🎫", custom_id="ticket:open")
+    @discord.ui.button(label="Open Ticket", style=discord.ButtonStyle.green, emoji="🎫", custom_id="ticket:open")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg = self.cog.config.get(self.guild_id, {}).get("panels", {}).get(self.panel_name)
         if not cfg:
