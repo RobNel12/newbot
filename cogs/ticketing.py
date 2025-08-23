@@ -141,7 +141,7 @@ class TicketPanelView(discord.ui.View):
         self.guild_id = str(guild_id)
         self.panel_name = panel_name
 
-    @discord.ui.button(label="Open Ticket", style=discord.ButtonStyle.green, emoji="🎫", custom_id="ticket:open")
+    @discord.ui.button(label="Find a Coach", style=discord.ButtonStyle.green, emoji=<a:flex2:1408923147326984348>, custom_id="ticket:open")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg = self.cog.config.get(self.guild_id, {}).get("panels", {}).get(self.panel_name)
         if not cfg:
