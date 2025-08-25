@@ -80,27 +80,26 @@ class TicketSetupView(discord.ui.View):
         embed = discord.Embed(
             title=f"Get Personalized {self.panel_name.title()}!",
             description="""
-            Click below to open a coaching ticket. 
-            You can request a specific coach, or browse #👥-coach-roster
-            to see coaches and past-session ratings.
-            Coaching is **always free**.
-            """,
+            Click below to open a coaching ticket. You can request a specific coach, or browse #👥-coach-roster to see coaches and past-session ratings.
+            
+            Coaching is **always free**.""",
             color=0xEFA56D
         )
         embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")  # full-size image
 
         view = TicketPanelView(self.cog, self.guild.id, self.panel_name)
-        await interaction.channel.send(embed=embed, view=view)
+        sent = await interaction.channel.send(embed=embed, view=view)
 
         panels[self.panel_name]["message_id"] = sent.id
         panels[self.panel_name]["channel_id"] = interaction.channel.id
         save_config(self.cog.config)
-
+        
         await interaction.response.send_message(
             f"✅ Panel `{self.panel_name}` configured and posted in {interaction.channel.mention}",
             ephemeral=True
         )
         self.stop()
+
 
 class CategorySelect(discord.ui.ChannelSelect):
     def __init__(self, view: "TicketSetupView"):
