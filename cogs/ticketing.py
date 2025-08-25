@@ -596,31 +596,31 @@ class TicketCog(commands.Cog):
 
 
     def build_roster_embeds(self, guild_id: int) -> list[discord.Embed]:
-    g = self.config.get(str(guild_id), {})
-    roster = g.get("roster", {})
-    members = list(roster.values())
-    embeds = []
-
-    for i in range(0, len(members), 25):
-        embed = discord.Embed(
-            title="🎟️ Coaching Roster",
-            color=discord.Color.gold(),
-            timestamp=discord.utils.utcnow()
-        )
-        embed.set_footer(text="Last updated")
-
-        for data in members[i:i+25]:
-            total = data["good"] + data["bad"]
-            if total:
-                percent = (data["good"] / total) * 100
-                rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
-            else:
-                rating = "No reviews yet"
-            embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
-
-        embeds.append(embed)
-
-    return embeds
+        g = self.config.get(str(guild_id), {})
+        roster = g.get("roster", {})
+        members = list(roster.values())
+        embeds = []
+    
+        for i in range(0, len(members), 25):
+            embed = discord.Embed(
+                title="🎟️ Coaching Roster",
+                color=discord.Color.gold(),
+                timestamp=discord.utils.utcnow()
+            )
+            embed.set_footer(text="Last updated")
+    
+            for data in members[i:i+25]:
+                total = data["good"] + data["bad"]
+                if total:
+                    percent = (data["good"] / total) * 100
+                    rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
+                else:
+                    rating = "No reviews yet"
+                embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
+    
+            embeds.append(embed)
+    
+        return embeds
 
 
     # ---------- Auto Roster Posting ----------
