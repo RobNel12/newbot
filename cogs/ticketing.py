@@ -877,7 +877,7 @@ class TicketCog(commands.Cog):
         g["roster"] = {}
         save_config(self.config)
         await self.update_roster_message(guild.id, force_new=True)
-        await interaction.response.send_message(f"🧹 Purged. Removed role from **{removed}** members and cleared roster.", ephemeral=True)'
+        await interaction.response.send_message(f"🧹 Purged. Removed role from **{removed}** members and cleared roster.", ephemeral=True)
 
     # ---------- Panel setup ----------
     @app_commands.command(name="ticket_setup", description="Create a ticket panel")
