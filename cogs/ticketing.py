@@ -92,6 +92,10 @@ class TicketSetupView(discord.ui.View):
         view = TicketPanelView(self.cog, self.guild.id, self.panel_name)
         await interaction.channel.send(embed=embed, view=view)
 
+        panels[self.panel_name]["message_id"] = sent.id
+        panels[self.panel_name]["channel_id"] = interaction.channel.id
+        save_config(self.cog.config)
+
         await interaction.response.send_message(
             f"✅ Panel `{self.panel_name}` configured and posted in {interaction.channel.mention}",
             ephemeral=True
