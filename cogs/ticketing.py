@@ -667,19 +667,17 @@ class TicketCog(commands.Cog):
         if not channel:
             return
 
-        embed = self.build_roster_embed(guild_id)
+        embeds = self.build_roster_embeds(guild_id)
 
-        msg: Optional[discord.Message] = None
         if not force_new and auto.get("message_id"):
             try:
                 msg = await channel.fetch_message(auto["message_id"])
-                await msg.edit(embed=embed)
+                await msg.edit(embeds=embeds)
                 return
             except Exception:
                 pass
-
-        # Post new message if missing/failed
-        sent = await channel.send(embed=embed)
+        
+        sent = await channel.send(embeds=embeds)
         auto["message_id"] = sent.id
         save_config(self.config)
 
