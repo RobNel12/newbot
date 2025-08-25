@@ -608,13 +608,6 @@ class SubmitButton(ui.Button):
             allowed_mentions=discord.AllowedMentions(roles=True),
         )
 
-        # Optionally update DB
-        await self.cog.update_ticket_meta(
-            interaction.channel.id,
-            submitted_by_id=interaction.user.id,
-            submitted_by_name=str(interaction.user),
-        )
-
         # Disable the button after use
         self.disabled = True
         await interaction.message.edit(view=self.view)
