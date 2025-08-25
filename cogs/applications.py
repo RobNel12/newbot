@@ -12,7 +12,8 @@ from discord.ext import commands
 import aiosqlite
 import chat_exporter
 
-# ---------- DB schema ----------
+# ======================= DB SCHEMA =======================
+
 GUILD_TABLE = """
 CREATE TABLE IF NOT EXISTS app_config(
   guild_id INTEGER PRIMARY KEY,
@@ -46,7 +47,8 @@ CREATE TABLE IF NOT EXISTS app_tickets(
 );
 """
 
-# ---------- helpers ----------
+# ======================= HELPERS =======================
+
 def csv_join(ids: List[int]) -> str:
     return ",".join(str(i) for i in ids)
 
@@ -55,7 +57,7 @@ def csv_parse(s: Optional[str]) -> List[int]:
         return []
     return [int(x) for x in s.split(",") if x.strip().isdigit()]
 
-def dt_iso() -> str:
+def now_utc_str() -> str:
     return dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc).isoformat()
 
 @dataclass
@@ -88,16 +90,17 @@ class GuildConfig:
             panel_channel_id=row["panel_channel_id"],
         )
 
-# ---------- main cog ----------
+# ======================= COG =======================
+
 class Applications(commands.Cog):
-    """Application Ticket system with GUI setup & ChatExporter logging."""
+    """Application Tickets with GUI setup & ChatExporter transcript logging."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.db_path = "applications.sqlite3"
         self._guild_cache: Dict[int, GuildConfig] = {}
 
-    # ----- DB helpers -----
+    # ---------- DB ----------
     async def ensure_db(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL;")
@@ -158,7 +161,7 @@ class Applications(commands.Cog):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "INSERT INTO app_tickets(guild_id, opener_id, opener_name, channel_id, created_at) VALUES(?,?,?,?,?)",
-                (guild_id, opener.id, str(opener), channel.id, dt_iso())
+                (guild_id, opener.id, str(opener), channel.id, now_utc_str())
             )
             await db.commit()
             cur = await db.execute("SELECT last_insert_rowid()")
@@ -169,9 +172,8 @@ class Applications(commands.Cog):
     async def update_ticket_meta(self, channel_id: int, **cols: Any):
         if not cols:
             return
-        keys = ", ".join([f"{k} = ?" for k in cols.keys()])
-        values = list(cols.values())
-        values.append(channel_id)
+        keys = ", ".join(f"{k} = ?" for k in cols.keys())
+        values = list(cols.values()) + [channel_id]
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(f"UPDATE app_tickets SET {keys} WHERE channel_id = ?", values)
             await db.commit()
@@ -184,13 +186,13 @@ class Applications(commands.Cog):
             await cur.close()
             return row
 
-    # ----- persistent Submit button id -----
+    # ---------- Persistent button id ----------
     def make_submit_custom_id(self, guild_id: int) -> str:
         return f"app_submit:{guild_id}"
 
     async def cog_load(self):
         await self.ensure_db()
-        # Rehydrate persistent Submit button for any configured guild
+        # Rehydrate persistent submit buttons for configured guilds
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cur = await db.execute("SELECT guild_id FROM app_config WHERE panel_message_id IS NOT NULL")
@@ -199,7 +201,8 @@ class Applications(commands.Cog):
                 self.bot.add_view(ApplicationSubmitView(self.make_submit_custom_id(r["guild_id"])))
             await cur.close()
 
-    # ----- setup command -----
+    # ======================= COMMANDS =======================
+
     @app_commands.guild_only()
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.command(name="app_setup", description="Configure the Application Ticket system (multi-step GUI).")
@@ -214,21 +217,31 @@ class Applications(commands.Cog):
             category_id=0,
             log_channel_id=0,
             panel_message="Click the button to submit an application.",
-            open_template=("**Application started!**\n"
-                           "Please fill out this template:\n"
-                           "1) Age:\n2) Experience:\n3) Why should we accept you?\n"),
+            open_template=(
+                "**Application started!**\n"
+                "Please fill out this template:\n"
+                "1) Age:\n2) Experience:\n3) Why should we accept you?\n"
+            ),
         )
         await self.upsert_config(cfg)
 
-        # Build the wizard and render Step 1 directly onto the deferred original response.
         view = SetupPager(self, cfg)
-        await view._render(interaction)  # <-- this draws the selects + Next/Cancel buttons
+        await view.build_initial()  # ensure Step 1 appears immediately
 
-    # ----- panel publishing -----
+        embed = discord.Embed(
+            title="Application Tickets — Setup Wizard",
+            description="Follow the steps to configure roles, channels, and messages.\nUse **Next** to proceed.",
+            color=discord.Color.blurple()
+        )
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    # ======================= PANEL / TICKETS =======================
+
     async def publish_panel(self, guild: discord.Guild, cfg: GuildConfig) -> Optional[discord.Message]:
         channel = guild.get_channel(cfg.panel_channel_id) if cfg.panel_channel_id else None
         if channel is None:
-            # Pick first text channel the bot can send to
+            # Pick first text channel we can talk in
+            channel = None
             for ch in guild.text_channels:
                 perms = ch.permissions_for(guild.me)
                 if perms.send_messages and perms.embed_links:
@@ -248,16 +261,15 @@ class Applications(commands.Cog):
         cfg.panel_message_id = msg.id
         cfg.panel_channel_id = channel.id
         await self.upsert_config(cfg)
-        # Make persistent across restarts
+
+        # Persistent across restarts
         self.bot.add_view(view, message_id=msg.id)
         return msg
 
-    # ----- ticket creation -----
     async def create_ticket_channel(self, interaction: Interaction, cfg: GuildConfig) -> Optional[discord.TextChannel]:
         guild = interaction.guild
         opener: discord.Member = interaction.user
 
-        # create channel name like 000-opener
         idx = await self.next_ticket_number(cfg)
         ch_name = f"{idx:03d}-{opener.name.lower().replace(' ', '-')[:18]}"
 
@@ -267,7 +279,6 @@ class Applications(commands.Cog):
             opener: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True, manage_messages=True, read_message_history=True),
         }
-        # accept + close roles
         if cfg.accept_role_id:
             role = guild.get_role(cfg.accept_role_id)
             if role:
@@ -296,7 +307,7 @@ class Applications(commands.Cog):
         await interaction.followup.send(f"Ticket created: {channel.mention}", ephemeral=True)
         return channel
 
-    # ----- permission guards -----
+    # ---------- permission helpers ----------
     def _is_acceptor(self, member: discord.Member, cfg: GuildConfig) -> bool:
         return bool(cfg.accept_role_id and member.get_role(cfg.accept_role_id))
 
@@ -304,16 +315,17 @@ class Applications(commands.Cog):
         return any(member.get_role(rid) for rid in cfg.close_role_ids) or self._is_acceptor(member, cfg)
 
     def _is_adminish(self, member: discord.Member) -> bool:
-        perms = member.guild_permissions
-        return perms.manage_guild or perms.administrator or perms.manage_channels
+        p = member.guild_permissions
+        return p.manage_guild or p.manage_channels or p.administrator
 
-    # ----- transcript/logging -----
+    # ---------- transcript logging ----------
     async def export_and_log(self, channel: discord.TextChannel, cfg: GuildConfig, deleted_by: discord.Member) -> Optional[discord.Message]:
         log_channel = channel.guild.get_channel(cfg.log_channel_id)
         if not isinstance(log_channel, discord.TextChannel):
             return None
 
-        html: Optional[str] = await chat_exporter.export(
+        # Export HTML via ChatExporter
+        html = await chat_exporter.export(
             channel=channel,
             limit=None,
             tz_info="UTC",
@@ -324,21 +336,21 @@ class Applications(commands.Cog):
             html = "<html><body><h1>No transcript available.</h1></body></html>"
 
         file = discord.File(BytesIO(html.encode("utf-8")), filename=f"{channel.name}.html")
-        sent = await log_channel.send(file=file)
+        sent_file_msg = await log_channel.send(file=file)
+        url = sent_file_msg.attachments[0].url if sent_file_msg.attachments else "https://example.com"
 
         row = await self.fetch_ticket_row(channel.id)
+        created_by = f"<@{row['opener_id']}>" if row else "Unknown"
         accepted_by = row["accepted_by_name"] if row and row["accepted_by_name"] else "—"
-
-        url = sent.attachments[0].url if sent.attachments else "https://example.com"
 
         embed = discord.Embed(
             title=f"Ticket #{channel.name.split('-')[0]} in Applications!",
             color=discord.Color.dark_theme()
         )
-        embed.add_field(name="Type", value="from **Application** in " + channel.mention, inline=False)
-        embed.add_field(name="Created by", value=f"<@{row['opener_id']}>" if row else "Unknown")
+        embed.add_field(name="Type", value=f"from **Application** in {channel.mention}", inline=False)
+        embed.add_field(name="Created by", value=created_by)
         embed.add_field(name="Deleted by", value=deleted_by.mention, inline=False)
-        embed.add_field(name="Claimed by", value=f"{accepted_by}", inline=False)
+        embed.add_field(name="Claimed by", value=accepted_by, inline=False)
         embed.add_field(name="Participants", value=f"messages by {self.bot.user.mention}", inline=False)
         embed.set_footer(text=dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"))
 
@@ -346,9 +358,10 @@ class Applications(commands.Cog):
         view.add_item(ui.Button(style=discord.ButtonStyle.secondary, label="Transcript", url=url))
         return await log_channel.send(embed=embed, view=view)
 
-# ---------- setup wizard (no duplicate custom_ids) ----------
+# ======================= SETUP WIZARD =======================
+
 class SetupPager(ui.View):
-    """3-step setup to beat the 5-item limit without duplicate custom_ids."""
+    """3-step setup; unique custom_ids; selects ack to avoid 'Interaction failed'."""
 
     def __init__(self, cog: Applications, cfg: GuildConfig):
         super().__init__(timeout=600)
@@ -356,32 +369,62 @@ class SetupPager(ui.View):
         self.cfg = cfg
         self.page = 1
 
-        # Step 1 (roles)
+        # Step 1 selects
         self.accept_role = ui.RoleSelect(placeholder="Select the ACCEPT (moderator) role", min_values=1, max_values=1)
         self.granted_role = ui.RoleSelect(placeholder="Select the role to GRANT on accept", min_values=1, max_values=1)
         self.close_roles = ui.RoleSelect(placeholder="Select roles that can CLOSE tickets (multi)", min_values=0, max_values=5)
 
-        # Step 2 (channels)
+        # Step 2 selects
         self.category = ui.ChannelSelect(
-            placeholder="Select ticket CATEGORY",
-            channel_types=[discord.ChannelType.category],
-            min_values=1, max_values=1
+            placeholder="Select ticket CATEGORY", channel_types=[discord.ChannelType.category], min_values=1, max_values=1
         )
         self.log_channel = ui.ChannelSelect(
-            placeholder="Select LOG channel",
-            channel_types=[discord.ChannelType.text],
-            min_values=1, max_values=1
+            placeholder="Select LOG channel", channel_types=[discord.ChannelType.text], min_values=1, max_values=1
         )
+
+    # ---------- select acks ----------
+    def _ack_select(self, select: ui.Select):
+        async def _cb(i: Interaction):
+            try:
+                await i.response.defer_update()
+            except Exception:
+                pass
+        select.callback = _cb
+
+    def _wire_current_selects(self):
+        for child in self.children:
+            if isinstance(child, (ui.RoleSelect, ui.ChannelSelect)):
+                self._ack_select(child)
+
+    # ---------- initial build (first message) ----------
+    async def build_initial(self):
+        self.clear_items()
+
+        def make_btn(label, style, cid, cb):
+            btn = ui.Button(label=label, style=style, custom_id=cid)
+            async def _cb(i: Interaction):
+                await cb(i)
+            btn.callback = _cb
+            self.add_item(btn)
+
+        # Step 1 widgets
+        self.add_item(self.accept_role)
+        self.add_item(self.granted_role)
+        self.add_item(self.close_roles)
+        self._wire_current_selects()
+
+        # Buttons
+        make_btn("Next →", discord.ButtonStyle.primary, "pager:next", self._next)
+        make_btn("Cancel", discord.ButtonStyle.danger, "pager:cancel", self._cancel)
 
     async def interaction_check(self, interaction: Interaction) -> bool:
         return interaction.user.guild_permissions.manage_guild
 
     async def on_timeout(self):
-        for child in self.children:
-            child.disabled = True
+        for c in self.children:
+            c.disabled = True
 
     async def _render(self, interaction: Interaction):
-        # Clear and rebuild the view for the current page
         self.clear_items()
 
         def make_btn(label, style, cid, cb):
@@ -412,31 +455,43 @@ class SetupPager(ui.View):
             make_btn("Cancel", discord.ButtonStyle.danger, "pager:cancel", self._cancel)
             desc = "### Step 3/3 — Messages & Publish\nSet the panel message and open-template, then publish the button panel."
 
+        # wire selects so user selections are acknowledged
+        self._wire_current_selects()
+
         embed = discord.Embed(
             title="Application Tickets — Setup Wizard",
             description=desc,
             color=discord.Color.blurple()
         )
-        # Component interactions use edit_message
         if interaction.response.is_done():
             await interaction.edit_original_response(embed=embed, view=self)
         else:
             await interaction.response.edit_message(embed=embed, view=self)
 
-    # callbacks wired via make_btn
+    # ---------- nav callbacks ----------
     async def _next(self, interaction: Interaction):
         if self.page == 1:
+            if not self.accept_role.values or not self.granted_role.values:
+                return await interaction.response.send_message(
+                    "Please select both the **Accept** role and the **Granted** role.", ephemeral=True
+                )
             self.cfg.accept_role_id = self.accept_role.values[0].id
             self.cfg.granted_role_id = self.granted_role.values[0].id
-            self.cfg.close_role_ids = [r.id for r in self.close_roles.values]
+            self.cfg.close_role_ids = [r.id for r in (self.close_roles.values or [])]
             await self.cog.upsert_config(self.cfg)
             self.page = 2
+
         elif self.page == 2:
+            if not self.category.values or not self.log_channel.values:
+                return await interaction.response.send_message(
+                    "Please select a **Category** and a **Log channel**.", ephemeral=True
+                )
             self.cfg.category_id = self.category.values[0].id
             self.cfg.log_channel_id = self.log_channel.values[0].id
             self.cfg.panel_channel_id = self.cfg.panel_channel_id or self.cfg.log_channel_id
             await self.cog.upsert_config(self.cfg)
             self.page = 3
+
         await self._render(interaction)
 
     async def _back(self, interaction: Interaction):
@@ -464,8 +519,18 @@ class SetupPager(ui.View):
             await interaction.response.edit_message(content=text, view=None, embed=None)
 
 class MessagesModal(ui.Modal, title="Edit Panel & Open Template"):
-    panel_message = ui.TextInput(label="Panel message", style=discord.TextStyle.paragraph, placeholder="Shown above the Submit button", max_length=1500)
-    open_template = ui.TextInput(label="Ticket open template", style=discord.TextStyle.paragraph, placeholder="Sent inside the new ticket channel", max_length=2000)
+    panel_message = ui.TextInput(
+        label="Panel message",
+        style=discord.TextStyle.paragraph,
+        placeholder="Shown above the Submit button",
+        max_length=1500
+    )
+    open_template = ui.TextInput(
+        label="Ticket open template",
+        style=discord.TextStyle.paragraph,
+        placeholder="Sent inside the new ticket channel",
+        max_length=2000
+    )
 
     def __init__(self, cog: Applications, cfg: GuildConfig, parent: SetupPager):
         super().__init__()
@@ -485,7 +550,8 @@ class MessagesModal(ui.Modal, title="Edit Panel & Open Template"):
         except Exception:
             pass
 
-# ---------- Panel submit (persistent) ----------
+# ======================= PANEL VIEW =======================
+
 class ApplicationSubmitView(ui.View):
     def __init__(self, custom_id: str):
         super().__init__(timeout=None)
@@ -503,7 +569,8 @@ class ApplicationSubmitButton(ui.Button):
         await interaction.response.defer(ephemeral=True, thinking=True)
         await cog.create_ticket_channel(interaction, cfg)
 
-# ---------- Ticket actions ----------
+# ======================= TICKET ACTIONS =======================
+
 class TicketActionView(ui.View):
     def __init__(self, cog: Applications, cfg: GuildConfig, opener_id: int):
         super().__init__(timeout=None)
@@ -544,7 +611,10 @@ class AcceptButton(ui.Button):
             accepted_by_id=interaction.user.id,
             accepted_by_name=str(interaction.user),
         )
-        await interaction.followup.send(f"{opener.mention if opener else 'Applicant'} has been **accepted** and granted {role.mention if role else 'the role'}.", ephemeral=True)
+        await interaction.followup.send(
+            f"{opener.mention if opener else 'Applicant'} has been **accepted** and granted {role.mention if role else 'the role'}.",
+            ephemeral=True
+        )
 
 class CloseButton(ui.Button):
     def __init__(self, cog: Applications, cfg: GuildConfig):
@@ -559,8 +629,17 @@ class CloseButton(ui.Button):
 
         ch: discord.TextChannel = interaction.channel
         overwrites = ch.overwrites
+
+        # lock channel for @everyone and opener; keep staff visibility
         overwrites[interaction.guild.default_role] = discord.PermissionOverwrite(view_channel=False)
-        # lock sending for everyone except staff; simplest: disable @everyone and opener; staff retain default perms
+        row = await self.cog.fetch_ticket_row(ch.id)
+        if row:
+            opener = interaction.guild.get_member(row["opener_id"])
+            if opener:
+                current = overwrites.get(opener, discord.PermissionOverwrite())
+                current.send_messages = False
+                overwrites[opener] = current
+
         try:
             await ch.edit(overwrites=overwrites, reason="Ticket closed")
         except discord.Forbidden:
@@ -604,6 +683,7 @@ class DeleteButton(ui.Button):
         except discord.Forbidden:
             await interaction.followup.send("I lack permission to delete this channel.", ephemeral=True)
 
-# ---------- extension setup ----------
+# ======================= EXTENSION SETUP =======================
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Applications(bot))
