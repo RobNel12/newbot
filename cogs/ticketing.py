@@ -591,26 +591,37 @@ class TicketCog(commands.Cog):
 
     @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
     async def roster_view(self, interaction: discord.Interaction):
-        embed = self.build_roster_embed(interaction.guild.id)
-        await interaction.response.send_message(embed=embed)
+        embeds = self.build_roster_embeds(interaction.guild.id)
+        await interaction.response.send_message(embeds=embeds)
 
-    def build_roster_embed(self, guild_id: int) -> discord.Embed:
-        g = self.config.get(str(guild_id), {})
-        roster = g.get("roster", {})
-        embed = discord.Embed(title="🎟️ Coaching Roster", color=discord.Color.gold(), timestamp=discord.utils.utcnow())
+
+    def build_roster_embeds(self, guild_id: int) -> list[discord.Embed]:
+    g = self.config.get(str(guild_id), {})
+    roster = g.get("roster", {})
+    members = list(roster.values())
+    embeds = []
+
+    for i in range(0, len(members), 25):
+        embed = discord.Embed(
+            title="🎟️ Coaching Roster",
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow()
+        )
         embed.set_footer(text="Last updated")
-        if not roster:
-            embed.description = "No one in roster."
-        else:
-            for _, data in roster.items():
-                total = data["good"] + data["bad"]
-                if total:
-                    percent = (data["good"] / total) * 100
-                    rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
-                else:
-                    rating = "No reviews yet"
-                embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
-        return embed
+
+        for data in members[i:i+25]:
+            total = data["good"] + data["bad"]
+            if total:
+                percent = (data["good"] / total) * 100
+                rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
+            else:
+                rating = "No reviews yet"
+            embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
+
+        embeds.append(embed)
+
+    return embeds
+
 
     # ---------- Auto Roster Posting ----------
     @app_commands.command(name="ticket_roster_autopost_set", description="Set up auto-posting roster updates")
