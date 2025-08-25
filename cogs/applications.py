@@ -650,7 +650,7 @@ class AcceptButton(ui.Button):
         )
         await interaction.followup.send(
             f"{opener.mention if opener else 'Applicant'} has been **accepted** and granted {role.mention if role else 'the role'}.",
-            ephemeral=True
+            ephemeral=False
         )
 
 class CloseButton(ui.Button):
