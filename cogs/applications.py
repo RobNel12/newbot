@@ -488,7 +488,7 @@ class SetupPager(ui.View):
                 )
             self.cfg.category_id = self.category.values[0].id
             self.cfg.log_channel_id = self.log_channel.values[0].id
-            self.cfg.panel_channel_id = self.cfg.panel_channel_id or self.cfg.log_channel_id
+            self.cfg.panel_channel_id = self.cfg.panel_channel_id or interaction.channel.id
             await self.cog.upsert_config(self.cfg)
             self.page = 3
 
