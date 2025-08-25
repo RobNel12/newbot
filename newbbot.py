@@ -32,7 +32,7 @@ class ModBot(commands.Bot):
         await self.load_extension("cogs.applications")
 
         # Guild sync (instant, for debug)
-        GUILD_ID = 1304124705896136744  # put your test server ID in .env
+        GUILD_ID = "1304124705896136744"  # put your test server ID in .env
         guild = discord.Object(id=GUILD_ID)
         await self.tree.sync(guild=guild)
         logging.info(f"App commands synced to guild {GUILD_ID}.")
