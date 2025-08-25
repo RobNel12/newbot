@@ -381,6 +381,12 @@ class SetupPager(ui.View):
         self.log_channel = ui.ChannelSelect(
             placeholder="Select LOG channel", channel_types=[discord.ChannelType.text], min_values=1, max_values=1
         )
+        self.panel_channel = ui.ChannelSelect(
+            placeholder="Select PANEL channel (where the button lives)",
+            channel_types=[discord.ChannelType.text],
+            min_values=1, max_values=1
+        )
+
 
     # ---------- select acks ----------
     def _ack_select(self, select: ui.Select):
@@ -444,6 +450,8 @@ class SetupPager(ui.View):
         elif self.page == 2:
             self.add_item(self.category)
             self.add_item(self.log_channel)
+            self.add_item(self.panel_channel)
+          
             make_btn("← Back", discord.ButtonStyle.secondary, "pager:back", self._back)
             make_btn("Next →", discord.ButtonStyle.primary, "pager:next", self._next)
             make_btn("Cancel", discord.ButtonStyle.danger, "pager:cancel", self._cancel)
@@ -488,7 +496,8 @@ class SetupPager(ui.View):
                 )
             self.cfg.category_id = self.category.values[0].id
             self.cfg.log_channel_id = self.log_channel.values[0].id
-            self.cfg.panel_channel_id = self.cfg.panel_channel_id or interaction.channel.id
+            self.cfg.panel_channel_id = self.panel_channel.values[0].id
+
             await self.cog.upsert_config(self.cfg)
             self.page = 3
 
@@ -682,7 +691,7 @@ class CloseButton(ui.Button):
 
 class DeleteButton(ui.Button):
     def __init__(self, cog: Applications, cfg: GuildConfig):
-        super().__init__(style=discord.ButtonStyle.danger, label="Delete & Log", emoji="🗑️")
+        super().__init__(style=discord.ButtonStyle.danger, label="Delete", emoji="🗑️")
         self.cog = cog
         self.cfg = cfg
 
