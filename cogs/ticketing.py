@@ -488,6 +488,64 @@ class TicketChannelView(discord.ui.View):
         modal = FeedbackModal(self.cog, opener_id=self.opener_id, claimer_id=self.claimer_id, channel=interaction.channel)
         await interaction.response.send_modal(modal)
 
+    @app_commands.command(
+    name="ticket_certify_set",
+    description="Configure auto role assignment from reviews: min votes and min % positive"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def certify_set(
+        self,
+        interaction: discord.Interaction,
+        role: discord.Role,
+        min_votes: int,
+        min_percent: float
+    ):
+        g = self.config.setdefault(str(interaction.guild.id), {})
+        g["certification"] = {
+            "role_id": role.id,
+            "min_votes": min_votes,
+            "min_percent": min_percent
+        }
+        save_config(self.config)
+        await interaction.response.send_message(
+            f"✅ Certification set: {role.mention} requires ≥{min_votes} reviews with ≥{min_percent}% positive.",
+            ephemeral=True
+        )
+
+    @app_commands.command(
+    name="ticket_certify_rescan",
+    description="Re-evaluate all roster members against certification thresholds"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def certify_rescan(self, interaction: discord.Interaction):
+        g = self.config.get(str(interaction.guild.id), {})
+        cert = g.get("certification")
+        if not cert:
+            return await interaction.response.send_message(
+                "⚠️ Certification is not configured. Use `/ticket_certify_set` first.",
+                ephemeral=True
+            )
+    
+        guild = interaction.guild
+        roster = g.get("roster", {})
+        changed = 0
+    
+        for uid in list(roster.keys()):
+            member = guild.get_member(int(uid))
+            if not member:
+                continue
+            before_roles = set(member.roles)
+            await self.check_certification(guild, member)
+            after_roles = set(member.roles)
+            if before_roles != after_roles:
+                changed += 1
+    
+        await self.update_roster_message(guild.id)
+        await interaction.response.send_message(
+            f"🔁 Rescan complete. Updated roles for **{changed}** member(s).",
+            ephemeral=True
+        )
+
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
     def __init__(self, cog: "TicketCog", log_channel: Optional[discord.TextChannel], opener_id: int, staff_id: int, log_msg: Optional[discord.Message]):
@@ -707,11 +765,51 @@ class TicketCog(commands.Cog):
         save_config(self.config)
         await self.update_roster_message(guild_id)
 
+        # Auto-check certification for the reviewed staff member
+        guild = self.bot.get_guild(guild_id)
+        if guild:
+            member = guild.get_member(staff_id)
+            if member:
+                await self.check_certification(guild, member)
+
+
     # ---------- Claim role: config & syncing (NEW) ----------
     def _get_claim_role(self, guild: discord.Guild) -> Optional[discord.Role]:
         gid = str(guild.id)
         rid = self.config.get(gid, {}).get("claim_role_id")
         return guild.get_role(rid) if rid else None
+
+    async def check_certification(self, guild: discord.Guild, member: discord.Member):
+        g = self.config.get(str(guild.id), {})
+        cert = g.get("certification")
+        if not cert:
+            return
+    
+        roster = g.get("roster", {})
+        stats = roster.get(str(member.id))
+        if not stats:
+            return
+    
+        total = stats.get("good", 0) + stats.get("bad", 0)
+        if total == 0:
+            return
+    
+        percent = (stats.get("good", 0) / total) * 100
+        role = guild.get_role(cert.get("role_id", 0))
+        if not role:
+            return
+    
+        # Grant or remove according to thresholds
+        meets = (total >= cert.get("min_votes", 0)) and (percent >= cert.get("min_percent", 0))
+        try:
+            if meets and role not in member.roles:
+                await member.add_roles(role, reason="Certified by ticket reviews")
+            elif not meets and role in member.roles:
+                await member.remove_roles(role, reason="No longer meets certification requirements")
+        except Exception:
+            # Ignore permission issues silently
+            pass
+
 
     @app_commands.command(name="ticket_claim_role_set", description="Set the role whose members can claim tickets (also auto-sync with roster)")
     @app_commands.checks.has_permissions(administrator=True)
@@ -779,7 +877,7 @@ class TicketCog(commands.Cog):
         g["roster"] = {}
         save_config(self.config)
         await self.update_roster_message(guild.id, force_new=True)
-        await interaction.response.send_message(f"🧹 Purged. Removed role from **{removed}** members and cleared roster.", ephemeral=True)
+        await interaction.response.send_message(f"🧹 Purged. Removed role from **{removed}** members and cleared roster.", ephemeral=True)'
 
     # ---------- Panel setup ----------
     @app_commands.command(name="ticket_setup", description="Create a ticket panel")
