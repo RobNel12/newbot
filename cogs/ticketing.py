@@ -805,6 +805,40 @@ class TicketCog(commands.Cog):
             f"Configuring panel `{panel_name}` — choose options below:", view=view, ephemeral=True
         )
 
+    @app_commands.command(name="ticket_panel_edit", description="Edit an existing ticket panel embed")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def panel_edit(self, interaction: discord.Interaction, panel_name: str, new_title: str, new_description: str):
+        gid = str(interaction.guild.id)
+        gdata = self.config.get(gid, {})
+        panels = gdata.get("panels", {})
+        panel = panels.get(panel_name)
+        if not panel:
+            return await interaction.response.send_message(f"⚠️ Panel `{panel_name}` not found.", ephemeral=True)
+    
+        channel = interaction.guild.get_channel(panel.get("channel_id"))
+        if not channel:
+            return await interaction.response.send_message("⚠️ Panel channel missing.", ephemeral=True)
+    
+        try:
+            msg = await channel.fetch_message(panel.get("message_id"))
+        except Exception:
+            return await interaction.response.send_message("⚠️ Could not fetch panel message.", ephemeral=True)
+    
+        # Build new embed
+        embed = discord.Embed(
+            title=new_title,
+            description=new_description,
+            color=discord.Color.orange()
+        )
+        # You could preserve the image if you want
+        embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")
+    
+        # Rebuild the panel view
+        view = TicketPanelView(self, interaction.guild.id, panel_name)
+    
+        await msg.edit(embed=embed, view=view)
+        await interaction.response.send_message(f"✅ Panel `{panel_name}` updated.", ephemeral=True)
+
     # ---------- Persistent views ----------
     async def cog_load(self):
         if not hasattr(self, "config") or self.config is None:
