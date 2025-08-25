@@ -220,13 +220,9 @@ class Applications(commands.Cog):
         )
         await self.upsert_config(cfg)
 
+        # Build the wizard and render Step 1 directly onto the deferred original response.
         view = SetupPager(self, cfg)
-        embed = discord.Embed(
-            title="Application Tickets — Setup Wizard",
-            description="Follow the steps to configure roles, channels, and messages.\nUse **Next** to proceed.",
-            color=discord.Color.blurple()
-        )
-        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+        await view._render(interaction)  # <-- this draws the selects + Next/Cancel buttons
 
     # ----- panel publishing -----
     async def publish_panel(self, guild: discord.Guild, cfg: GuildConfig) -> Optional[discord.Message]:
