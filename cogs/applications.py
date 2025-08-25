@@ -578,10 +578,38 @@ class TicketActionView(ui.View):
         self.cfg = cfg
         self.opener_id = opener_id
 
-        self.add_item(ui.Button(label="Submit", style=discord.ButtonStyle.primary, emoji="📨", custom_id="noop_submit", disabled=True))
+        self.add_item(SubmitButton(cog, cfg, opener_id))
         self.add_item(AcceptButton(cog, cfg))
         self.add_item(CloseButton(cog, cfg))
         self.add_item(DeleteButton(cog, cfg))
+
+class SubmitButton(ui.Button):
+    def __init__(self, cog: Applications, cfg: GuildConfig, opener_id: int):
+        super().__init__(style=discord.ButtonStyle.primary, label="Submit", emoji="📨")
+        self.cog = cog
+        self.cfg = cfg
+        self.opener_id = opener_id
+
+    async def callback(self, interaction: Interaction):
+        if interaction.user.id != self.opener_id:
+            return await interaction.response.send_message("Only the applicant can submit this ticket.", ephemeral=True)
+
+        await interaction.response.send_message(
+            f"{interaction.user.mention} has submitted their application! {interaction.guild.get_role(self.cfg.accept_role_id).mention if self.cfg.accept_role_id else ''}",
+            allowed_mentions=discord.AllowedMentions(roles=True),
+        )
+
+        # Optionally update DB
+        await self.cog.update_ticket_meta(
+            interaction.channel.id,
+            submitted_by_id=interaction.user.id,
+            submitted_by_name=str(interaction.user),
+        )
+
+        # Disable the button after use
+        self.disabled = True
+        await interaction.message.edit(view=self.view)
+
 
 class AcceptButton(ui.Button):
     def __init__(self, cog: Applications, cfg: GuildConfig):
