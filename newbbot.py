@@ -31,9 +31,12 @@ class ModBot(commands.Bot):
         await self.load_extension("cogs.ticketing")
         await self.load_extension("cogs.applications")
 
-        # Global sync (slower rollout, ~1h but necessary for all guilds)
-        await self.tree.sync()
-        logging.info("App commands synced globally.")
+        # Guild sync (instant, for debug)
+        GUILD_ID = 1304124705896136744  # put your test server ID in .env
+        guild = discord.Object(id=GUILD_ID)
+        await self.tree.sync(guild=guild)
+        logging.info(f"App commands synced to guild {GUILD_ID}.")
+
 
 bot = ModBot()
 
