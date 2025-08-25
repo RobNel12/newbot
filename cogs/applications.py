@@ -687,7 +687,7 @@ class CloseButton(ui.Button):
             closed_by_id=interaction.user.id,
             closed_by_name=str(interaction.user),
         )
-        await interaction.followup.send("Ticket closed.", ephemeral=True)
+        await interaction.followup.send("Ticket closed.", ephemeral=False)
 
 class DeleteButton(ui.Button):
     def __init__(self, cog: Applications, cfg: GuildConfig):
