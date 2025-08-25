@@ -478,6 +478,9 @@ class SetupPager(ui.View):
 
     # ---------- nav callbacks ----------
     async def _next(self, interaction: Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         if self.page == 1:
             if not self.accept_role.values or not self.granted_role.values:
                 return await interaction.response.send_message(
@@ -504,10 +507,16 @@ class SetupPager(ui.View):
         await self._render(interaction)
 
     async def _back(self, interaction: Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         self.page = max(1, self.page - 1)
         await self._render(interaction)
 
     async def _cancel(self, interaction: Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         for c in self.children:
             c.disabled = True
         if interaction.response.is_done():
@@ -516,9 +525,15 @@ class SetupPager(ui.View):
             await interaction.response.edit_message(content="Setup cancelled.", view=self, embed=None)
 
     async def _messages(self, interaction: Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         await interaction.response.send_modal(MessagesModal(self.cog, self.cfg, parent=self))
 
     async def _publish(self, interaction: Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         await self.cog.upsert_config(self.cfg)
         msg = await self.cog.publish_panel(interaction.guild, self.cfg)
         text = f"✅ Panel published in {msg.channel.mention}." if msg else "Couldn't find a channel to publish the panel."
