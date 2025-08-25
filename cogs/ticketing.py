@@ -79,7 +79,12 @@ class TicketSetupView(discord.ui.View):
 
         embed = discord.Embed(
             title=f"Get Personalized {self.panel_name.title()}!",
-            description="Click below to find somebody willing to help you!",
+            description="""
+            Click below to open a coaching ticket. 
+            You can request a specific coach, or browse #👥-coach-roster
+            to see coaches and past-session ratings.
+            Coaching is **always free**.
+            """,
             color=0xEFA56D
         )
         embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")  # full-size image
@@ -186,7 +191,13 @@ class TicketPanelView(discord.ui.View):
         log_channel = guild.get_channel(cfg["log_channel"])
 
         await channel.send(
-            f"{interaction.user.mention} opened a ticket!",
+            f"""
+            {interaction.user.mention} 
+            If you are short on time or you don’t mind who you get,
+            write “any available @coach” in your ticket and the first coach will claim it.
+            After your session, please rate your coach to help our coaches and future players.
+            Coaching is **always free**.
+            """,
             view=TicketChannelView(
                 opener_id=interaction.user.id,
                 cog=self.cog,
