@@ -80,7 +80,7 @@ class TicketSetupView(discord.ui.View):
         embed = discord.Embed(
             title=f"Get Personalized {self.panel_name.title()}!",
             description="""
-            Click below to open a coaching ticket. You can request a specific coach, or browse #👥-coach-roster to see coaches and past-session ratings.
+            Click below to open a coaching ticket. You can request a specific coach, or browse https://discord.com/channels/1018555500989792276/1409616907660824576 to see coaches and past-session ratings.
             
             Coaching is **always free**.""",
             color=0xEFA56D
