@@ -195,10 +195,8 @@ class TicketPanelView(discord.ui.View):
 
         await channel.send(
             f"""
-            {interaction.user.mention} 
-            If you are short on time or you don’t mind who you get,
-            write “any available @coach” in your ticket and the first coach will claim it.
-            After your session, please rate your coach to help our coaches and future players.
+            {interaction.user.mention} If you are short on time or you don’t mind who you get, write “any available @coach” in your ticket and the first coach will claim it. After your session, please rate your coach to help our coaches and future players.
+            
             Coaching is **always free**.
             """,
             view=TicketChannelView(
