@@ -1,4 +1,4 @@
-import discord, json, os, asyncio, datetime, io
+import discord, json, os, asyncio, datetime, io, time
 from discord.ext import commands
 from discord import app_commands
 from typing import List, Optional, Dict
@@ -566,6 +566,8 @@ class TicketCog(commands.Cog):
         save_config(self.config)
         self._autopost_task = self.bot.loop.create_task(self.autopost_loop())
 
+        self._suppress_sync = False  # prevent spammy updates during bulk ops
+
     # ---------- Roster commands ----------
     @app_commands.command(name="ticket_roster_add", description="Add a member to the roster")
     @app_commands.checks.has_permissions(administrator=True)
@@ -702,14 +704,20 @@ class TicketCog(commands.Cog):
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
             try:
+                now = time.time()
                 for gid, g in list(self.config.items()):
                     if gid == "_channel_meta":
                         continue
                     auto = g.get("roster_autopost")
-                    if auto:
-                        _ = auto.get("interval", 60)  # interval kept; checked each minute
+                    if not auto:
+                        continue
+                    interval = max(1, int(auto.get("interval", 60))) * 60
+                    last = float(auto.get("last_post", 0))
+                    if now - last >= interval:
                         await self.update_roster_message(int(gid))
-                await asyncio.sleep(60)  # check once a minute
+                        auto["last_post"] = time.time()
+                        save_config(self.config)
+                await asyncio.sleep(60)
             except Exception:
                 await asyncio.sleep(60)
 
@@ -775,28 +783,49 @@ class TicketCog(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     async def roster_purge(self, interaction: discord.Interaction, confirm: bool = False):
         if not confirm:
-            return await interaction.response.send_message("⚠️ This will clear the roster and remove the claim role from all members. Re-run with `confirm: True` to proceed.", ephemeral=True)
-
+            return await interaction.response.send_message(
+                "⚠️ This will clear the roster and remove the claim role from all members. Re-run with `confirm: True` to proceed.",
+                ephemeral=True
+            )
+    
         guild = interaction.guild
         g = self.config.setdefault(str(guild.id), {})
         role = self._get_claim_role(guild)
-
-        # Remove role from all members
+    
+        await interaction.response.send_message("🧹 Purging roster… this may take a moment.", ephemeral=True)
+    
         removed = 0
-        if role:
-            # role.members is a cached list; iterate copy
-            for m in list(role.members):
-                try:
-                    await m.remove_roles(role, reason="Roster purge")
-                    removed += 1
-                except Exception:
-                    pass
+        self._suppress_sync = True  # 🔇 stop on_member_update churn
+    
+        try:
+            if role:
+                # iterate over a COPY; gently pace to avoid 429s
+                for m in list(role.members):
+                    try:
+                        await m.remove_roles(role, reason="Roster purge")
+                        removed += 1
+                    except Exception:
+                        pass
+                    # tiny pause reduces burst-rate 429s without being slow
+                    await asyncio.sleep(0.15)
+    
+            # Clear roster in one shot
+            g["roster"] = {}
+            save_config(self.config)
+    
+            # Single, final message update; prefer editing existing message
+            await self.update_roster_message(guild.id, force_new=False)
+    
+        finally:
+            self._suppress_sync = False  # 🔊 re-enable
+            # One last refresh in case anything slipped during the window
+            await self.update_roster_message(guild.id, force_new=False)
+    
+        await interaction.followup.send(
+            f"✅ Purged. Removed role from **{removed}** members and cleared the roster.",
+            ephemeral=True
+        )
 
-        # Clear roster
-        g["roster"] = {}
-        save_config(self.config)
-        await self.update_roster_message(guild.id, force_new=True)
-        await interaction.response.send_message(f"🧹 Purged. Removed role from **{removed}** members and cleared roster.", ephemeral=True)
 
     # ---------- Panel setup ----------
     @app_commands.command(name="ticket_setup", description="Create a ticket panel")
@@ -857,7 +886,9 @@ class TicketCog(commands.Cog):
     # ---------- Listeners to auto-sync when role changes (NEW) ----------
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        # If claiming role toggled on/off, sync roster accordingly
+        if self._suppress_sync:
+            return  # skip churn during bulk operations (e.g., purge)
+    
         role = self._get_claim_role(after.guild)
         if not role:
             return
@@ -865,7 +896,7 @@ class TicketCog(commands.Cog):
         has = role in after.roles
         if had == has:
             return  # no change
-
+    
         g = self.config.setdefault(str(after.guild.id), {})
         roster = g.setdefault("roster", {})
         if has and str(after.id) not in roster:
@@ -876,6 +907,7 @@ class TicketCog(commands.Cog):
             roster.pop(str(after.id), None)
             save_config(self.config)
             await self.update_roster_message(after.guild.id)
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(TicketCog(bot))
