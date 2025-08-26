@@ -1,0 +1,15 @@
+{
+  "1304124705896136744": {
+    "category_id": 1408902468405821490,
+    "staff_role_ids": [
+      1408861104402206730
+    ],
+    "admin_role_ids": [
+      1381707634473963633
+    ],
+    "approve_role_id": 1407018729455353987,
+    "logs_channel_id": 1406743612791717939,
+    "panel_name": "Become a Coach",
+    "counter": 5
+  }
+}

@@ -1,0 +1,489 @@
+{
+  "_channel_meta": {
+    "1408269722377785394": {
+      "ticket_number": 1,
+      "panel_name": "Coaching",
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:01:06.266659+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408273546605498439": {
+      "ticket_number": 2,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:16:18.049571+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408273758980018227": {
+      "ticket_number": 3,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:17:08.669995+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408275226336428042": {
+      "ticket_number": 4,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:22:58.580951+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408277228197777531": {
+      "ticket_number": 5,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:30:55.790066+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408278611458527314": {
+      "ticket_number": 6,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:36:25.625418+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408279699188355132": {
+      "ticket_number": 7,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:40:44.932323+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408279904360988702": {
+      "ticket_number": 8,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:41:35.095854+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408282916340891708": {
+      "ticket_number": 9,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T02:53:31.964441+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408297963058626601": {
+      "ticket_number": 10,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T03:53:19.362130+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408474763533484078": {
+      "ticket_number": 11,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T15:35:52.085926+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1408475235287830699": {
+      "ticket_number": 12,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T15:37:44.395382+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1408476290822049832": {
+      "ticket_number": 13,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T15:41:56.019048+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1408485311633293443": {
+      "ticket_number": 14,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T16:17:46.837133+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1408485763657634004": {
+      "ticket_number": 15,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T16:19:34.543641+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408486058408284211": {
+      "ticket_number": 16,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T16:20:44.857374+00:00"
+    },
+    "1408486550773174314": {
+      "ticket_number": 17,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-22T16:22:42.334099+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408706975490899968": {
+      "ticket_number": 18,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-23T06:58:35.571363+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1408738991619969065": {
+      "ticket_number": 19,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-23T09:05:48.780830+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1408864114314317984": {
+      "ticket_number": 20,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-23T17:23:00.349146+00:00"
+    },
+    "1408904042788159519": {
+      "ticket_number": 21,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-23T20:01:40.148973+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1409045680634331156": {
+      "ticket_number": 23,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-24T05:24:29.154943+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1409621271922344039": {
+      "ticket_number": 1,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1306049512187363378,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-25T19:31:40.810557+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1409621848999727147": {
+      "ticket_number": 2,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1306049512187363378,
+      "opener_id": 191629571597008896,
+      "opener_slug": "fredflintstone",
+      "opened_at": "2025-08-25T19:33:58.448104+00:00",
+      "claimer_id": 416337648282501121,
+      "claimer_slug": "bumblebee-\u30b8",
+      "claimer_feedback_sent": true
+    },
+    "1409688886539587817": {
+      "ticket_number": 24,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:00:21.399088+00:00"
+    },
+    "1409689375532388353": {
+      "ticket_number": 25,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:02:17.959588+00:00"
+    },
+    "1409689696673468556": {
+      "ticket_number": 26,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:03:34.567294+00:00"
+    },
+    "1409690055806812272": {
+      "ticket_number": 27,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:05:00.226813+00:00"
+    },
+    "1409690522892767425": {
+      "ticket_number": 28,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:06:51.523671+00:00"
+    },
+    "1409692482270138559": {
+      "ticket_number": 29,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:14:38.673372+00:00"
+    },
+    "1409693702259216395": {
+      "ticket_number": 30,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:19:29.587543+00:00"
+    },
+    "1409694002667716739": {
+      "ticket_number": 31,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:20:41.257253+00:00"
+    },
+    "1409694483540480093": {
+      "ticket_number": 32,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:22:35.930082+00:00"
+    },
+    "1409697766615154829": {
+      "ticket_number": 3,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1306049512187363378,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:35:38.617167+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    },
+    "1409699653221355571": {
+      "ticket_number": 33,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:43:08.351899+00:00"
+    },
+    "1409700070445682829": {
+      "ticket_number": 34,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T00:44:47.859949+00:00"
+    },
+    "1409707378206838794": {
+      "ticket_number": 4,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1306049512187363378,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T01:13:50.150933+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz",
+      "claimer_feedback_sent": true
+    },
+    "1409715818853564426": {
+      "ticket_number": 5,
+      "panel_name": "Coaching",
+      "panel_channel_id": 1306049512187363378,
+      "opener_id": 301481215058378752,
+      "opener_slug": "hankee",
+      "opened_at": "2025-08-26T01:47:22.606881+00:00",
+      "claimer_id": 503464784826466314,
+      "claimer_slug": "nut"
+    },
+    "1409915252807696455": {
+      "ticket_number": 35,
+      "panel_name": "Test",
+      "panel_channel_id": 1406743723366285474,
+      "opener_id": 749469375282675752,
+      "opener_slug": "chezzx",
+      "opened_at": "2025-08-26T14:59:51.303136+00:00",
+      "claimer_id": 749469375282675752,
+      "claimer_slug": "chezz"
+    }
+  },
+  "1304124705896136744": {
+    "panels": {
+      "Coaching": {
+        "category": 1406743514351538186,
+        "view_roles": [
+          1407018729455353987
+        ],
+        "delete_roles": [
+          1381707634473963633
+        ],
+        "log_channel": 1406743612791717939,
+        "message_id": 1409700041651916882,
+        "channel_id": 1406743723366285474
+      },
+      "Testing": {
+        "category": 1406743514351538186,
+        "view_roles": [
+          1408861104402206730,
+          1407018729455353987
+        ],
+        "delete_roles": [
+          1381707634473963633
+        ],
+        "log_channel": 1406743612791717939
+      },
+      "Test": {
+        "category": 1406743514351538186,
+        "view_roles": [
+          1407018729455353987
+        ],
+        "delete_roles": [
+          1381707634473963633
+        ],
+        "log_channel": 1406743612791717939,
+        "message_id": 1409883423396593876,
+        "channel_id": 1406743723366285474
+      }
+    },
+    "ticket_counter": 36,
+    "roster": {
+      "749469375282675752": {
+        "name": "chezz",
+        "good": 0,
+        "bad": 0
+      }
+    },
+    "roster_autopost": {
+      "channel_id": 1406874910961307708,
+      "message_id": 1409721814531313735,
+      "interval": 1,
+      "last_post": 1756228688.9271896
+    },
+    "claim_role_id": 1407018729455353987
+  },
+  "1018555500989792276": {
+    "claim_role_id": 1099709588183449671,
+    "roster_autopost": {
+      "channel_id": 1409616907660824576,
+      "message_id": 1409700651025301675,
+      "interval": 1,
+      "last_post": 1756228689.1859624
+    },
+    "roster": {
+      "191629571597008896": {
+        "name": "\ud83c\udd75\ud83c\udd81\ud83c\udd74\ud83c\udd73",
+        "good": 0,
+        "bad": 0
+      },
+      "749469375282675752": {
+        "name": "chezz",
+        "good": 1,
+        "bad": 0
+      },
+      "503464784826466314": {
+        "name": "nut",
+        "good": 1,
+        "bad": 0
+      },
+      "580186556204318720": {
+        "name": "FEAR",
+        "good": 0,
+        "bad": 0
+      },
+      "291301482463100928": {
+        "name": "prodSNO",
+        "good": 0,
+        "bad": 0
+      },
+      "756690482184061019": {
+        "name": "Ikea",
+        "good": 0,
+        "bad": 0
+      },
+      "480605931848073216": {
+        "name": "CRAM",
+        "good": 0,
+        "bad": 0
+      }
+    },
+    "panels": {
+      "Coaching": {
+        "category": 1306050638391676999,
+        "view_roles": [
+          1099709588183449671
+        ],
+        "delete_roles": [
+          1018756417232064522
+        ],
+        "log_channel": 1019041402182717531
+      }
+    },
+    "ticket_counter": 6
+  }
+}
