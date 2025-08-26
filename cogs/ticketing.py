@@ -610,6 +610,7 @@ class TicketCog(commands.Cog):
 
     @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
     async def roster_view(self, interaction: discord.Interaction):
+        embeds = self.build_roster_embeds(guild.id)
         # If you sometimes use single-embed edit:
         if len(embeds) == 1:
             await msg.edit(embed=embeds[0], content=None)  # not content=""
@@ -714,6 +715,7 @@ class TicketCog(commands.Cog):
             return
 
         # If you sometimes use single-embed edit:
+        embeds = self.build_roster_embeds(guild.id)
         if len(embeds) == 1:
             await msg.edit(embed=embeds[0], content=None)  # not content=""
         else:
