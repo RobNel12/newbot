@@ -568,6 +568,28 @@ class TicketCog(commands.Cog):
 
         self._suppress_sync = False  # prevent spammy updates during bulk ops
 
+
+    @commands.Cog.listener()
+    async def on_user_update(self, before: discord.User, after: discord.User):
+        if before.name == after.name:
+            return
+        changed = False
+        for gid, g in self.config.items():
+            if gid == "_channel_meta":
+                continue
+            roster = g.get("roster", {})
+            if str(after.id) in roster:
+                roster[str(after.id)]["name"] = after.name
+                changed = True
+                try:
+                    await self.update_roster_message(int(gid))
+                except Exception:
+                    pass
+        if changed:
+            save_config(self.config)
+
+
+    
     # ---------- Roster commands ----------
     @app_commands.command(name="ticket_roster_add", description="Add a member to the roster")
     @app_commands.checks.has_permissions(administrator=True)
@@ -576,7 +598,7 @@ class TicketCog(commands.Cog):
         roster = g.setdefault("roster", {})
         if str(member.id) in roster:
             return await interaction.response.send_message("⚠️ That member is already in the roster.", ephemeral=True)
-        roster[str(member.id)] = {"name": member.display_name, "good": 0, "bad": 0}
+        roster[str(member.id)] = {"name": member.name, "good": 0, "bad": 0}
         save_config(self.config)
 
         # === NEW: give claim role if configured ===
@@ -650,6 +672,12 @@ class TicketCog(commands.Cog):
         roster = g.get("roster", {})
         members = list(roster.values())
         embeds: list[discord.Embed] = []
+
+        if member_obj:
+            live_name = member_obj.name  # username only
+        else:
+            live_name = data.get("name") or "Unknown"
+
     
         # If empty, return a single placeholder embed (prevents 50006)
         if not members:
