@@ -194,11 +194,11 @@ class TicketPanelView(discord.ui.View):
         log_channel = guild.get_channel(cfg["log_channel"])
 
         description=(
-            "Click below to open a coaching ticket.\n"
-            "You can request a specific coach, or browse #👥-coach-roster "
-            "to see coaches and past-session ratings.\n"
+            "If your short on time or you don’t mind who you get,"
+            "write “any available @coach” in your ticket and the first coach will claim it.\n"
+            "After your session, please rate your coach to help our coaches and future players.\n"
             "\n"
-            "Coaching is **always free**."
+            "Coaching is always free."
         )
 
         
