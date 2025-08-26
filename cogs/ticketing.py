@@ -610,18 +610,39 @@ class TicketCog(commands.Cog):
 
     @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
     async def roster_view(self, interaction: discord.Interaction):
-        embeds = self.build_roster_embeds(guild.id)
-        # If you sometimes use single-embed edit:
-        if len(embeds) == 1:
-            await msg.edit(embed=embeds[0], content=None)  # not content=""
+        embeds = self.build_roster_embeds(interaction.guild.id)
+        channel = interaction.channel
+    
+        # Check if we already have a roster_autopost message ID stored
+        g = self.config.setdefault(str(interaction.guild.id), {})
+        auto = g.get("roster_autopost")
+        msg = None
+        if auto and auto.get("message_id"):
+            try:
+                msg = await channel.fetch_message(auto["message_id"])
+            except discord.NotFound:
+                msg = None
+    
+        if msg:
+            # Edit existing message
+            if len(embeds) == 1:
+                await msg.edit(embed=embeds[0], content=None)
+            else:
+                await msg.edit(embeds=embeds, content=None)
         else:
-            await msg.edit(embeds=embeds, content=None)
-        
-        # If you’re sending a new one:
-        if len(embeds) == 1:
-            await channel.send(embed=embeds[0])
-        else:
-            await channel.send(embeds=embeds)
+            # Send a fresh one
+            if len(embeds) == 1:
+                msg = await channel.send(embed=embeds[0])
+            else:
+                msg = await channel.send(embeds=embeds)
+    
+            # Save the ID if we’re tracking auto messages
+            if auto is not None:
+                auto["message_id"] = msg.id
+                save_config(self.config)
+    
+        await interaction.response.send_message("✅ Roster posted.", ephemeral=True)
+
 
 
     def build_roster_embeds(self, guild_id: int) -> list[discord.Embed]:
@@ -706,38 +727,38 @@ class TicketCog(commands.Cog):
         auto = g.get("roster_autopost")
         if not auto:
             return
-
+    
         guild = self.bot.get_guild(guild_id)
         if not guild:
             return
         channel = guild.get_channel(auto.get("channel_id"))
         if not channel:
             return
-
-        # If you sometimes use single-embed edit:
+    
         embeds = self.build_roster_embeds(guild.id)
-        if len(embeds) == 1:
-            await msg.edit(embed=embeds[0], content=None)  # not content=""
-        else:
-            await msg.edit(embeds=embeds, content=None)
-        
-        # If you’re sending a new one:
-        if len(embeds) == 1:
-            await channel.send(embed=embeds[0])
-        else:
-            await channel.send(embeds=embeds)
-
+    
+        msg = None
         if not force_new and auto.get("message_id"):
             try:
                 msg = await channel.fetch_message(auto["message_id"])
-                await msg.edit(embeds=embeds)
-                return
-            except Exception:
-                pass
-        
-        sent = await channel.send(embeds=embeds)
-        auto["message_id"] = sent.id
-        save_config(self.config)
+            except discord.NotFound:
+                msg = None
+    
+        if msg:
+            # Edit the existing message
+            if len(embeds) == 1:
+                await msg.edit(embed=embeds[0], content=None)
+            else:
+                await msg.edit(embeds=embeds, content=None)
+        else:
+            # Send a new message
+            if len(embeds) == 1:
+                msg = await channel.send(embed=embeds[0])
+            else:
+                msg = await channel.send(embeds=embeds)
+            auto["message_id"] = msg.id
+            save_config(self.config)
+
 
     async def autopost_loop(self):
         await self.bot.wait_until_ready()
