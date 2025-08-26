@@ -194,10 +194,9 @@ class TicketPanelView(discord.ui.View):
         log_channel = guild.get_channel(cfg["log_channel"])
 
         await channel.send(
-            f"""
-            {interaction.user.mention} If you are short on time or you don’t mind who you get, write “any available @coach” in your ticket and the first coach will claim it. After your session, please rate your coach to help our coaches and future players.
+            f"""{interaction.user.mention} If you are short on time or you don’t mind who you get, write “any available @coach” in your ticket and the first coach will claim it. After your session, please rate your coach to help our coaches and future players.
             
-        Coaching is **always free**.""",
+            Coaching is **always free**.""",
             view=TicketChannelView(
                 opener_id=interaction.user.id,
                 cog=self.cog,
