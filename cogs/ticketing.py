@@ -198,7 +198,7 @@ class TicketPanelView(discord.ui.View):
             "write “any available @coach” in your ticket and the first coach will claim it.\n"
             "After your session, please rate your coach to help our coaches and future players.\n"
             "\n"
-            "Coaching is always free."
+            "Coaching is **always free**."
         )
 
         
