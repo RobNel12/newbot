@@ -610,36 +610,63 @@ class TicketCog(commands.Cog):
 
     @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
     async def roster_view(self, interaction: discord.Interaction):
-        embeds = self.build_roster_embeds(interaction.guild.id)
-        await interaction.response.send_message(embeds=embeds)
+        # If you sometimes use single-embed edit:
+        if len(embeds) == 1:
+            await msg.edit(embed=embeds[0], content=None)  # not content=""
+        else:
+            await msg.edit(embeds=embeds, content=None)
+        
+        # If you’re sending a new one:
+        if len(embeds) == 1:
+            await channel.send(embed=embeds[0])
+        else:
+            await channel.send(embeds=embeds)
 
 
     def build_roster_embeds(self, guild_id: int) -> list[discord.Embed]:
         g = self.config.get(str(guild_id), {})
         roster = g.get("roster", {})
         members = list(roster.values())
-        embeds = []
+        embeds: list[discord.Embed] = []
     
+        # If empty, return a single placeholder embed (prevents 50006)
+        if not members:
+            e = discord.Embed(
+                title="🎟️ Coaching Roster",
+                description="No one is on the roster yet.",
+                color=discord.Color.gold(),
+                timestamp=discord.utils.utcnow()
+            )
+            e.set_footer(text="Last updated")
+            return [e]
+    
+        # Otherwise, chunk into pages of 25 fields (Discord limit)
         for i in range(0, len(members), 25):
-            embed = discord.Embed(
+            e = discord.Embed(
                 title="🎟️ Coaching Roster",
                 color=discord.Color.gold(),
                 timestamp=discord.utils.utcnow()
             )
-            embed.set_footer(text="Last updated")
+            e.set_footer(text="Last updated")
     
             for data in members[i:i+25]:
-                total = data["good"] + data["bad"]
+                name = (data.get("name") or "Unknown")[:256]  # field name limit
+                good = int(data.get("good", 0))
+                bad = int(data.get("bad", 0))
+                total = good + bad
                 if total:
-                    percent = (data["good"] / total) * 100
-                    rating = f"{percent:.1f}% 👍 ({data['good']} / {total})"
+                    percent = (good / total) * 100
+                    rating = f"{percent:.1f}% 👍 ({good} / {total})"
                 else:
                     rating = "No reviews yet"
-                embed.add_field(name=data.get("name", "Unknown"), value=rating, inline=False)
     
-            embeds.append(embed)
+                # field value limit: 1024
+                e.add_field(name=name, value=rating[:1024], inline=False)
+    
+            embeds.append(e)
     
         return embeds
+
 
 
     # ---------- Auto Roster Posting ----------
@@ -686,7 +713,17 @@ class TicketCog(commands.Cog):
         if not channel:
             return
 
-        embeds = self.build_roster_embeds(guild_id)
+        # If you sometimes use single-embed edit:
+        if len(embeds) == 1:
+            await msg.edit(embed=embeds[0], content=None)  # not content=""
+        else:
+            await msg.edit(embeds=embeds, content=None)
+        
+        # If you’re sending a new one:
+        if len(embeds) == 1:
+            await channel.send(embed=embeds[0])
+        else:
+            await channel.send(embeds=embeds)
 
         if not force_new and auto.get("message_id"):
             try:
