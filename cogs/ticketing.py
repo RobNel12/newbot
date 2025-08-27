@@ -696,12 +696,18 @@ class TicketCog(commands.Cog):
             e.set_footer(text="Last updated")
     
             for uid, data in members[i:i+25]:
-                # ✅ define member_obj before using it
                 member_obj = guild.get_member(int(uid)) if guild else None
     
                 if member_obj:
-                    live_name = member_obj.name  # always username
+                    display = member_obj.display_name
+                    uname = member_obj.name
+                    # Avoid duplicate if display == username
+                    if display == uname:
+                        live_name = uname
+                    else:
+                        live_name = f"{display} ({uname})"
                 else:
+                    # fallback to stored snapshot
                     live_name = data.get("name") or "Unknown"
     
                 name = live_name[:256]
