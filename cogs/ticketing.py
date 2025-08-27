@@ -5,6 +5,8 @@ from typing import List, Optional, Dict
 import chat_exporter
 
 CONFIG_FILE = "ticket_config.json"
+DEFAULT_TICKET_THUMB_URL  = "https://github.com/RobNel12/newbot/blob/main/coach_sword.png?raw=true"   # sword (thumbnail)
+DEFAULT_TICKET_BANNER_URL = "https://github.com/RobNel12/newbot/blob/main/coach_ticket.png?raw=true"   # knights (large image)
 
 # ---------------- Persistence ----------------
 def load_config():
@@ -193,26 +195,46 @@ class TicketPanelView(discord.ui.View):
 
         log_channel = guild.get_channel(cfg["log_channel"])
 
-        description=(
-            "If you are short on time or you don’t mind who you get, "
-            "write “any available @coach” in your ticket and the first coach will claim it.\n"
-            "After your session, please rate your coach to help our coaches and future players.\n"
-            "\n"
-            "Coaching is **always free**."
+        # Build the embed
+        embed = discord.Embed(
+            description=(
+                "<a:targespin:1044458269516759072> A player wants training.\n\n"
+                f"**Hello {interaction.user.display_name}!**\n"
+                "If you are short on time or you don’t mind who you get, "
+                "write “any available <@&1099709588183449671>” in your ticket and the first coach will claim it.\n"
+                "After your session, please rate your coach to help our coaches and future players.\n\n"
+                "Coaching is **always free**."
+            ),
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow(),
         )
-
         
-        await channel.send(
-            description,
+        # Use your constants
+        embed.set_thumbnail(url=DEFAULT_TICKET_THUMB_URL)
+        embed.set_image(url=DEFAULT_TICKET_BANNER_URL)
+        
+        # Send the welcome embed with controls
+        msg = await channel.send(
+            embed=embed,
             view=TicketChannelView(
                 opener_id=interaction.user.id,
                 cog=self.cog,
                 log_channel=log_channel,
                 log_msg=None,
-                channel_id=channel.id
-            )
+                channel_id=channel.id,
+            ),
+            allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False),
         )
+        
+        # Pin it if possible
+        try:
+            await msg.pin(reason="Pin initial ticket instructions")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+        
+        # Confirm ticket creation to the user
         await interaction.response.send_message(f"✅ Ticket created: {channel.mention}", ephemeral=True)
+
 
 # ---------------- Feedback Modal ----------------
 class FeedbackModal(discord.ui.Modal, title="Send feedback to the opener"):
@@ -588,7 +610,28 @@ class TicketCog(commands.Cog):
         if changed:
             save_config(self.config)
 
-
+    def build_ticket_welcome_embed(self, member: discord.Member, coach_role: Optional[discord.Role], thumb_url: str, banner_url: str) -> discord.Embed:
+        display = member.display_name
+        coach_mention = coach_role.mention if coach_role else "@Coach"
+    
+        headline = "💡  A player wants training."
+        greeting = f"**Hello {display}!**"
+        body = (
+            f"Let's match you with a {coach_mention} willing to help out. "
+            "Please provide any relevant information, including your skill level and playtime.\n\n"
+            "You can type the `!stats` command to view the K/D Ratio and Kill-Count of any player."
+        )
+    
+        embed = discord.Embed(
+            description=f"{headline}\n\n{greeting}\n\n{body}",
+            color=discord.Color.gold(),
+            timestamp=discord.utils.utcnow(),
+        )
+        if thumb_url:
+            embed.set_thumbnail(url=thumb_url)
+        if banner_url:
+            embed.set_image(url=banner_url)
+        return embed
     
     # ---------- Roster commands ----------
     @app_commands.command(name="ticket_roster_add", description="Add a member to the roster")
@@ -960,6 +1003,52 @@ class TicketCog(commands.Cog):
     
         await msg.edit(embed=embed, view=view)
         await interaction.response.send_message(f"✅ Panel `{panel_name}` updated.", ephemeral=True)
+
+    @app_commands.command(
+    name="ticket_image_set",
+    description="Set the large banner image shown on new ticket welcome messages"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def ticket_image_set(
+        self,
+        interaction: discord.Interaction,
+        panel_name: str,
+        image_url: str
+    ):
+        gid = str(interaction.guild.id)
+        panel = self.config.setdefault(gid, {}).setdefault("panels", {}).get(panel_name)
+        if not panel:
+            return await interaction.response.send_message(
+                f"⚠️ Panel `{panel_name}` not found.", ephemeral=True
+            )
+    
+        panel["ticket_image_url"] = image_url
+        save_config(self.config)
+        await interaction.response.send_message("✅ Updated banner image.", ephemeral=True)
+    
+    
+    @app_commands.command(
+        name="ticket_thumb_set",
+        description="Set the small thumbnail image shown on new ticket welcome messages"
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    async def ticket_thumb_set(
+        self,
+        interaction: discord.Interaction,
+        panel_name: str,
+        image_url: str
+    ):
+        gid = str(interaction.guild.id)
+        panel = self.config.setdefault(gid, {}).setdefault("panels", {}).get(panel_name)
+        if not panel:
+            return await interaction.response.send_message(
+                f"⚠️ Panel `{panel_name}` not found.", ephemeral=True
+            )
+    
+        panel["ticket_thumb_url"] = image_url
+        save_config(self.config)
+        await interaction.response.send_message("✅ Updated thumbnail image.", ephemeral=True)
+
 
     # ---------- Persistent views ----------
     async def cog_load(self):
