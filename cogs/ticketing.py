@@ -199,7 +199,7 @@ class TicketPanelView(discord.ui.View):
         embed = discord.Embed(
             description=(
                 "<a:targespin:1044458269516759072> A player wants training.\n\n"
-                f"**Hello {interaction.user.display_name}!**\n"
+                f"**Hello {interaction.user.display_name}!**\n\n"
                 "If you are short on time or you don’t mind who you get, "
                 "write “any available <@&1099709588183449671>” in your ticket and the first coach will claim it.\n"
                 "After your session, please rate your coach to help our coaches and future players.\n\n"
