@@ -205,7 +205,7 @@ class TicketPanelView(discord.ui.View):
                 "After your session, please rate your coach to help our coaches and future players.\n\n"
                 "Coaching is **always free**."
             ),
-            color=discord.Color.gold(),
+            color=0xEFA56D,
             timestamp=discord.utils.utcnow(),
         )
         
@@ -614,12 +614,14 @@ class TicketCog(commands.Cog):
         display = member.display_name
         coach_mention = coach_role.mention if coach_role else "@Coach"
     
-        headline = "💡  A player wants training."
+        headline = "<a:targespin:1044458269516759072> A player wants training."
         greeting = f"**Hello {display}!**"
         body = (
-            f"Let's match you with a {coach_mention} willing to help out. "
-            "Please provide any relevant information, including your skill level and playtime.\n\n"
-            "You can type the `!stats` command to view the K/D Ratio and Kill-Count of any player."
+            f"**Hello {interaction.user.display_name}!**\n"
+            "If you are short on time or you don’t mind who you get, "
+            "write “any available <@&1099709588183449671>” in your ticket and the first coach will claim it.\n"
+            "After your session, please rate your coach to help our coaches and future players.\n\n"
+            "Coaching is **always free**."
         )
     
         embed = discord.Embed(
