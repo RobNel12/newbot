@@ -8,6 +8,9 @@ CONFIG_FILE = "ticket_config.json"
 DEFAULT_TICKET_THUMB_URL  = "https://github.com/RobNel12/newbot/blob/main/coach_sword.png?raw=true"   # sword (thumbnail)
 DEFAULT_TICKET_BANNER_URL = "https://github.com/RobNel12/newbot/blob/main/coach_ticket.png?raw=true"   # knights (large image)
 
+# who can always delete tickets (owner override)
+OWNER_IDS = {749469375282675752}  # ← replace with YOUR Discord user ID
+
 # ---------------- Persistence ----------------
 def load_config():
     if not os.path.exists(CONFIG_FILE):
@@ -389,19 +392,28 @@ class TicketChannelView(discord.ui.View):
         cfg = self.cog.config.get(str(interaction.guild.id), {}).get("panels", {}).get(
             self.cog.channel_meta.get(str(self.channel_id), {}).get("panel_name", ""), {}
         )
-        allowed = interaction.user.guild_permissions.administrator
+
+        # owner override (your ID)
+        is_owner_override = interaction.user.id in OWNER_IDS
+
+        # admins always allowed
+        allowed = interaction.user.guild_permissions.administrator or is_owner_override
+
+        # delete-roles allowed
         if not allowed:
             for rid in cfg.get("delete_roles", []):
                 role = interaction.guild.get_role(rid)
                 if role and role in interaction.user.roles:
                     allowed = True
                     break
+
         if not allowed:
             return await interaction.response.send_message("You don't have permission to delete this ticket.", ephemeral=True)
 
         await interaction.response.send_message("Archiving and deleting ticket…", ephemeral=True)
         await asyncio.sleep(1)
         await self._log_and_delete(interaction.channel, interaction.user)
+
 
     async def _lock_channel(self, channel: discord.TextChannel, lock: bool):
         overwrites = channel.overwrites
