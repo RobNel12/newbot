@@ -670,16 +670,10 @@ class TicketCog(commands.Cog):
     def build_roster_embeds(self, guild_id: int) -> list[discord.Embed]:
         g = self.config.get(str(guild_id), {})
         roster = g.get("roster", {})
-        members = list(roster.values())
+        members = list(roster.items())  # (uid, data)
         embeds: list[discord.Embed] = []
-
-        if member_obj:
-            live_name = member_obj.name  # username only
-        else:
-            live_name = data.get("name") or "Unknown"
-
     
-        # If empty, return a single placeholder embed (prevents 50006)
+        # If empty roster
         if not members:
             e = discord.Embed(
                 title="🎟️ Coaching Roster",
@@ -690,7 +684,9 @@ class TicketCog(commands.Cog):
             e.set_footer(text="Last updated")
             return [e]
     
-        # Otherwise, chunk into pages of 25 fields (Discord limit)
+        guild = self.bot.get_guild(guild_id)
+    
+        # Chunk into pages of 25
         for i in range(0, len(members), 25):
             e = discord.Embed(
                 title="🎟️ Coaching Roster",
@@ -699,25 +695,26 @@ class TicketCog(commands.Cog):
             )
             e.set_footer(text="Last updated")
     
-            for data in members[i:i+25]:
-                name = (data.get("name") or "Unknown")[:256]  # field name limit
+            for uid, data in members[i:i+25]:
+                # ✅ define member_obj before using it
+                member_obj = guild.get_member(int(uid)) if guild else None
+    
+                if member_obj:
+                    live_name = member_obj.name  # always username
+                else:
+                    live_name = data.get("name") or "Unknown"
+    
+                name = live_name[:256]
                 good = int(data.get("good", 0))
                 bad = int(data.get("bad", 0))
                 total = good + bad
-                if total:
-                    percent = (good / total) * 100
-                    rating = f"{percent:.1f}% 👍 ({good} / {total})"
-                else:
-                    rating = "No reviews yet"
+                rating = f"{(good/total)*100:.1f}% 👍 ({good} / {total})" if total else "No reviews yet"
     
-                # field value limit: 1024
                 e.add_field(name=name, value=rating[:1024], inline=False)
     
             embeds.append(e)
     
         return embeds
-
-
 
     # ---------- Auto Roster Posting ----------
     @app_commands.command(name="ticket_roster_autopost_set", description="Set up auto-posting roster updates")
