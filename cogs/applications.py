@@ -235,6 +235,47 @@ class Applications(commands.Cog):
         )
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
+
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.command(
+        name="bulk_delete",
+        description="Bulk delete a number of messages and log the action."
+    )
+    async def bulk_delete(self, interaction: discord.Interaction, amount: int):
+        """Bulk delete messages in the current channel and log like ticket deletes."""
+
+        if amount <= 0:
+            return await interaction.response.send_message("Please specify a number greater than 0.", ephemeral=True)
+
+        # defer to avoid "interaction failed"
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        ch: discord.TextChannel = interaction.channel
+        cfg = await self.get_config(ch.guild.id)
+        if not cfg:
+            return await interaction.followup.send("System not configured yet.", ephemeral=True)
+
+        try:
+            deleted = await ch.purge(limit=amount, bulk=True, reason=f"Bulk delete by {interaction.user}")
+        except discord.Forbidden:
+            return await interaction.followup.send("I lack permission to bulk delete messages.", ephemeral=True)
+
+        # Log like the rest
+        log_channel = ch.guild.get_channel(cfg.log_channel_id)
+        if log_channel and isinstance(log_channel, discord.TextChannel):
+            embed = discord.Embed(
+                title="Bulk Delete Performed",
+                description=f"**{len(deleted)}** messages deleted in {ch.mention}.",
+                color=discord.Color.red()
+            )
+            embed.add_field(name="Moderator", value=interaction.user.mention)
+            embed.set_footer(text=dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"))
+            await log_channel.send(embed=embed)
+
+        await interaction.followup.send(f"✅ Deleted {len(deleted)} messages.", ephemeral=True)
+    
+
     # ======================= PANEL / TICKETS =======================
 
     async def publish_panel(self, guild: discord.Guild, cfg: GuildConfig) -> Optional[discord.Message]:
