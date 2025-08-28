@@ -172,6 +172,43 @@ class Moderation(commands.Cog):
         )
 
     # ---- Purge ----
+    @purge.command(name="bulk", description="Quickly delete the last N messages (uses Discord bulk delete).")
+    @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.describe(
+        amount="Number of recent messages to delete (1-1000)"
+    )
+    async def purge_bulk(
+        self,
+        interaction: discord.Interaction,
+        amount: app_commands.Range[int, 1, 1000],
+    ):
+        # Avoid 'Interaction failed'
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        try:
+            # Uses the bulk delete API under the hood when bulk=True
+            deleted = await interaction.channel.purge(
+                limit=amount,
+                bulk=True,
+                reason=f"Purged by {interaction.user} via /purge bulk"
+            )
+        except discord.Forbidden:
+            return await interaction.followup.send("❌ I don’t have permission to delete messages here.", ephemeral=True)
+        except discord.HTTPException:
+            return await interaction.followup.send("⚠️ Bulk delete failed (messages older than 14 days can’t be bulk-deleted).", ephemeral=True)
+
+        # Ephemeral confirmation to the moderator
+        await interaction.followup.send(f"🧹 Deleted **{len(deleted)}** messages.", ephemeral=True)
+
+        # Mod-log entry (reuses your helpers)
+        em = base_embed("Purge (Bulk)", interaction.user, reason=f"{len(deleted)} messages deleted.")
+        em.add_field(name="Amount Requested", value=str(amount))
+        em.add_field(name="Channel", value=interaction.channel.mention)
+        await send_modlog(interaction.guild, em)
+
+
+
+    
     purge = app_commands.Group(name="purge", description="Delete messages in bulk.")
 
     @purge.command(name="messages", description="Delete a number of messages with optional filters.")
