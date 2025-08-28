@@ -172,6 +172,9 @@ class Moderation(commands.Cog):
         )
 
     # ---- Purge ----
+    purge = app_commands.Group(name="purge", description="Delete messages in bulk.")
+
+    
     @purge.command(name="bulk", description="Quickly delete the last N messages (uses Discord bulk delete).")
     @app_commands.checks.has_permissions(manage_messages=True)
     @app_commands.describe(
@@ -205,11 +208,7 @@ class Moderation(commands.Cog):
         em.add_field(name="Amount Requested", value=str(amount))
         em.add_field(name="Channel", value=interaction.channel.mention)
         await send_modlog(interaction.guild, em)
-
-
-
-    
-    purge = app_commands.Group(name="purge", description="Delete messages in bulk.")
+        
 
     @purge.command(name="messages", description="Delete a number of messages with optional filters.")
     @app_commands.checks.has_permissions(manage_messages=True)
