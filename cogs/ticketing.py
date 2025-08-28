@@ -1,3 +1,4 @@
+# ticketing.py (general-purpose)
 import discord, json, os, asyncio, datetime, io, time
 from discord.ext import commands
 from discord import app_commands
@@ -5,11 +6,13 @@ from typing import List, Optional, Dict
 import chat_exporter
 
 CONFIG_FILE = "ticket_config.json"
-DEFAULT_TICKET_THUMB_URL  = "https://github.com/RobNel12/newbot/blob/main/coach_sword.png?raw=true"   # sword (thumbnail)
-DEFAULT_TICKET_BANNER_URL = "https://github.com/RobNel12/newbot/blob/main/coach_ticket.png?raw=true"   # knights (large image)
 
-# who can always delete tickets (owner override)
-OWNER_IDS = {749469375282675752}  # ← replace with YOUR Discord user ID
+# Neutral default artwork (server owners can override with /ticket_image_set and /ticket_thumb_set)
+DEFAULT_TICKET_THUMB_URL  = "https://example.com/ticket-thumb.png"
+DEFAULT_TICKET_BANNER_URL = "https://example.com/ticket-banner.png"
+
+# Who can always delete tickets (owner override). Leave empty or add your Discord user IDs.
+OWNER_IDS = set()
 
 # ---------------- Persistence ----------------
 def load_config():
@@ -66,7 +69,7 @@ class TicketSetupView(discord.ui.View):
     async def save_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.category or not self.view_roles or not self.log_channel:
             return await interaction.response.send_message(
-                "❌ You must select a category, at least one support role, and a log channel.",
+                "❌ You must select a category, at least one staff role, and a log channel.",
                 ephemeral=True,
             )
 
@@ -83,14 +86,16 @@ class TicketSetupView(discord.ui.View):
         save_config(self.cog.config)
 
         embed = discord.Embed(
-            title=f"Get Personalized {self.panel_name.title()}!",
-            description="""
-            Click below to open a coaching ticket. You can request a specific coach, or browse https://discord.com/channels/1018555500989792276/1409616907660824576 to see coaches and past-session ratings.
-            
-            Coaching is **always free**.""",
+            title=f"{self.panel_name.title()}",
+            description=(
+                "Click the button below to open a ticket.\n\n"
+                "A private channel will be created that only you and server staff can see. "
+                "When you’re done, staff can close and archive the ticket with a transcript."
+            ),
             color=0xEFA56D
         )
-        embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")  # full-size image
+        # Neutral banner (admins can override later with /ticket_image_set)
+        embed.set_image(url=DEFAULT_TICKET_BANNER_URL)
 
         view = TicketPanelView(self.cog, self.guild.id, self.panel_name)
         sent = await interaction.channel.send(embed=embed, view=view)
@@ -116,7 +121,7 @@ class CategorySelect(discord.ui.ChannelSelect):
 
 class ViewRolesSelect(discord.ui.RoleSelect):
     def __init__(self, view: "TicketSetupView"):
-        super().__init__(placeholder="Select support roles", min_values=1, max_values=5)
+        super().__init__(placeholder="Select staff roles (can view/participate)", min_values=1, max_values=5)
         self.view_ref = view
     async def callback(self, interaction: discord.Interaction):
         self.view_ref.view_roles = [r.id for r in self.values]
@@ -124,7 +129,7 @@ class ViewRolesSelect(discord.ui.RoleSelect):
 
 class DeleteRolesSelect(discord.ui.RoleSelect):
     def __init__(self, view: "TicketSetupView"):
-        super().__init__(placeholder="Select delete roles", min_values=0, max_values=5)
+        super().__init__(placeholder="Select delete roles (optional)", min_values=0, max_values=5)
         self.view_ref = view
     async def callback(self, interaction: discord.Interaction):
         self.view_ref.delete_roles = [r.id for r in self.values]
@@ -138,7 +143,7 @@ class LogChannelSelect(discord.ui.ChannelSelect):
         self.view_ref.log_channel = self.values[0].id
         await interaction.response.defer()
 
-class ClaimRoleSelect(discord.ui.RoleSelect):  # === NEW ===
+class ClaimRoleSelect(discord.ui.RoleSelect):  # kept for parity, not used in the setup flow by default
     def __init__(self, view: "TicketSetupView"):
         super().__init__(placeholder="Select claiming role (optional)", min_values=0, max_values=1)
         self.view_ref = view
@@ -154,7 +159,7 @@ class TicketPanelView(discord.ui.View):
         self.guild_id = str(guild_id)
         self.panel_name = panel_name
 
-    @discord.ui.button(label="Find a Coach", style=discord.ButtonStyle.green, emoji="<a:flex2:1408923147326984348>", custom_id="ticket:open")
+    @discord.ui.button(label="Open Ticket", style=discord.ButtonStyle.green, emoji="🎫", custom_id="ticket:open")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         cfg = self.cog.config.get(self.guild_id, {}).get("panels", {}).get(self.panel_name)
         if not cfg:
@@ -198,21 +203,17 @@ class TicketPanelView(discord.ui.View):
 
         log_channel = guild.get_channel(cfg["log_channel"])
 
-        # Build the embed
+        # Build the embed (general-purpose)
         embed = discord.Embed(
             description=(
-                "<a:targespin:1044458269516759072> A player wants training.\n\n"
+                "📨 A new ticket has been opened.\n\n"
                 f"**Hello {interaction.user.display_name}!**\n\n"
-                "If you are short on time or you don’t mind who you get, "
-                "write “any available <@&1099709588183449671>” in your ticket and the first coach will claim it.\n"
-                "After your session, please rate your coach to help our coaches and future players.\n\n"
-                "Coaching is **always free**."
+                "Staff will be with you shortly. Please describe your request clearly. "
+                "When resolved, a staff member can close and archive the ticket."
             ),
             color=0xEFA56D,
             timestamp=discord.utils.utcnow(),
         )
-        
-        # Use your constants
         embed.set_thumbnail(url=DEFAULT_TICKET_THUMB_URL)
         embed.set_image(url=DEFAULT_TICKET_BANNER_URL)
         
@@ -249,8 +250,8 @@ class FeedbackModal(discord.ui.Modal, title="Send feedback to the opener"):
         self.channel = channel
 
         self.feedback = discord.ui.TextInput(
-            label="Your feedback",
-            placeholder="Type your message to the opener…",
+            label="Your message",
+            placeholder="Type your message to the ticket opener…",
             style=discord.TextStyle.paragraph,
             min_length=5,
             max_length=2000,
@@ -268,7 +269,7 @@ class FeedbackModal(discord.ui.Modal, title="Send feedback to the opener"):
         claimer = interaction.guild.get_member(self.claimer_id) or interaction.user
 
         embed = discord.Embed(
-            title=f"New feedback from your ticket claimer",
+            title="New message from the ticket handler",
             description=self.feedback.value,
             color=discord.Color.blurple(),
             timestamp=discord.utils.utcnow(),
@@ -285,7 +286,7 @@ class FeedbackModal(discord.ui.Modal, title="Send feedback to the opener"):
             except Exception:
                 dm_ok = False
 
-        # Also mirror to logs channel (if configured), so staff see an audit trail
+        # Mirror to logs channel (if configured)
         gconf = self.cog.config.get(str(interaction.guild.id), {})
         panel_cfg = gconf.get("panels", {}).get(panel_name, {}) if panel_name else {}
         logs = interaction.guild.get_channel(panel_cfg.get("log_channel") or 0)
@@ -300,7 +301,6 @@ class FeedbackModal(discord.ui.Modal, title="Send feedback to the opener"):
         self.cog.channel_meta[str(self.channel.id)] = meta
         save_config(self.cog.config)
 
-        # Disable button on the message that launched this modal
         try:
             if interaction.message:
                 for child in interaction.view.children:
@@ -325,12 +325,12 @@ class TicketChannelView(discord.ui.View):
         self.closed: bool = False
         self.channel_id = channel_id
 
-    @discord.ui.button(label="Claim", style=discord.ButtonStyle.secondary, emoji="🎟️", custom_id="ticket:claim", row=0)
+    @discord.ui.button(label="Claim", style=discord.ButtonStyle.secondary, emoji="🧰", custom_id="ticket:claim", row=0)
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         g = self.cog.config.get(str(interaction.guild.id), {})
         roster = g.get("roster", {})
         if str(interaction.user.id) not in roster:
-            return await interaction.response.send_message("⚠️ You are not in the roster and cannot claim.", ephemeral=True)
+            return await interaction.response.send_message("⚠️ You are not in the ticket staff roster and cannot claim.", ephemeral=True)
 
         self.claimer_id = interaction.user.id
 
@@ -369,7 +369,7 @@ class TicketChannelView(discord.ui.View):
         claimer_display = claimer_member.mention
         
         await interaction.channel.send(
-            f"{opener_display}, please leave a review for {claimer_display}:",
+            f"{opener_display}, please leave feedback for {claimer_display}:",
             view=ReviewView(
                 self.cog,
                 self.log_channel,
@@ -393,7 +393,7 @@ class TicketChannelView(discord.ui.View):
             self.cog.channel_meta.get(str(self.channel_id), {}).get("panel_name", ""), {}
         )
 
-        # owner override (your ID)
+        # owner override
         is_owner_override = interaction.user.id in OWNER_IDS
 
         # admins always allowed
@@ -430,7 +430,7 @@ class TicketChannelView(discord.ui.View):
         async for msg in channel.history(limit=None, oldest_first=True):
             if msg.author.bot:
                 lc = (msg.content or "").lower()
-                if any(s in lc for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
+                if any(s in lc for s in ["opened a ticket", "leave feedback", "ticket closed", "archiving"]):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
 
@@ -451,7 +451,7 @@ class TicketChannelView(discord.ui.View):
         transcript_html = await chat_exporter.export(
             channel,
             limit=None,
-            bot=self.cog.bot,  # helps with avatars/emojis/time formatting
+            bot=self.cog.bot,
         )
         if not transcript_html:
             transcript_html = "<html><body><p>No transcript available.</p></body></html>"
@@ -491,13 +491,13 @@ class TicketChannelView(discord.ui.View):
         sent = await logs.send(file=transcript_file)
         transcript_url = sent.attachments[0].url if sent.attachments else None
 
-        # Build embed to match your example
+        # Build embed (general-purpose)
         embed = discord.Embed(
-            title=f"Ticket #{ticket_no:03d} in {panel_name.title() if panel_name else '?'}!",
+            title=f"Ticket #{ticket_no:03d}{' in ' + panel_name.title() if panel_name else ''}",
             color=discord.Color.blurple(),
             timestamp=discord.utils.utcnow(),
         )
-        embed.add_field(name="Type", value=f"from **{panel_name.title() if panel_name else '?'}** in {panel_where}", inline=False)
+        embed.add_field(name="Panel", value=f"{panel_name.title() if panel_name else '?'} in {panel_where}", inline=False)
         embed.add_field(name="Created by", value=f"{opener_display} {created_rel}", inline=True)
         embed.add_field(name="Deleted by", value=f"{closer_display} {deleted_rel}", inline=True)
         embed.add_field(name="Claimed by", value=claimers_display, inline=False)
@@ -552,10 +552,10 @@ class ReviewView(discord.ui.View):
 
     async def _guard(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.opener_id:
-            await interaction.response.send_message("Only the ticket opener can leave a review.", ephemeral=True)
+            await interaction.response.send_message("Only the ticket opener can leave feedback.", ephemeral=True)
             return False
         if self._used:
-            await interaction.response.send_message("This review has already been submitted.", ephemeral=True)
+            await interaction.response.send_message("This feedback has already been submitted.", ephemeral=True)
             return False
         return True
 
@@ -623,17 +623,15 @@ class TicketCog(commands.Cog):
             save_config(self.config)
 
     def build_ticket_welcome_embed(self, member: discord.Member, coach_role: Optional[discord.Role], thumb_url: str, banner_url: str) -> discord.Embed:
+        # Kept function name/signature for compatibility; wording generalized.
         display = member.display_name
-        coach_mention = coach_role.mention if coach_role else "@Coach"
+        _unused_role = coach_role  # retained to avoid breaking callers
     
-        headline = "<a:targespin:1044458269516759072> A player wants training."
+        headline = "📨 A new ticket has been opened."
         greeting = f"**Hello {display}!**"
         body = (
-            f"**Hello {interaction.user.display_name}!**\n"
-            "If you are short on time or you don’t mind who you get, "
-            "write “any available <@&1099709588183449671>” in your ticket and the first coach will claim it.\n"
-            "After your session, please rate your coach to help our coaches and future players.\n\n"
-            "Coaching is **always free**."
+            "Staff will be with you shortly. Please describe your request clearly. "
+            "When resolved, a staff member can close and archive the ticket."
         )
     
         embed = discord.Embed(
@@ -648,7 +646,7 @@ class TicketCog(commands.Cog):
         return embed
     
     # ---------- Roster commands ----------
-    @app_commands.command(name="ticket_roster_add", description="Add a member to the roster")
+    @app_commands.command(name="ticket_roster_add", description="Add a member to the ticket staff roster")
     @app_commands.checks.has_permissions(administrator=True)
     async def roster_add(self, interaction: discord.Interaction, member: discord.Member):
         g = self.config.setdefault(str(interaction.guild.id), {})
@@ -658,7 +656,7 @@ class TicketCog(commands.Cog):
         roster[str(member.id)] = {"name": member.name, "good": 0, "bad": 0}
         save_config(self.config)
 
-        # === NEW: give claim role if configured ===
+        # Give claim role if configured
         role = self._get_claim_role(interaction.guild)
         if role and role not in member.roles:
             try:
@@ -668,7 +666,7 @@ class TicketCog(commands.Cog):
 
         await interaction.response.send_message(f"✅ Added {member.mention} to the roster.", ephemeral=True)
 
-    @app_commands.command(name="ticket_roster_remove", description="Remove a member from the roster")
+    @app_commands.command(name="ticket_roster_remove", description="Remove a member from the ticket staff roster")
     @app_commands.checks.has_permissions(administrator=True)
     async def roster_remove(self, interaction: discord.Interaction, member: discord.Member):
         g = self.config.setdefault(str(interaction.guild.id), {})
@@ -677,7 +675,7 @@ class TicketCog(commands.Cog):
             return await interaction.response.send_message("⚠️ That member is not in the roster.", ephemeral=True)
         save_config(self.config)
 
-        # === NEW: optionally remove claim role when removed from roster ===
+        # Optionally remove claim role when removed from roster
         role = self._get_claim_role(interaction.guild)
         if role and role in member.roles:
             try:
@@ -687,12 +685,11 @@ class TicketCog(commands.Cog):
 
         await interaction.response.send_message(f"❌ Removed {member.mention} from the roster.", ephemeral=True)
 
-    @app_commands.command(name="ticket_roster", description="View the public roster with ratings")
+    @app_commands.command(name="ticket_roster", description="View the public ticket staff roster with ratings")
     async def roster_view(self, interaction: discord.Interaction):
         embeds = self.build_roster_embeds(interaction.guild.id)
         channel = interaction.channel
     
-        # Check if we already have a roster_autopost message ID stored
         g = self.config.setdefault(str(interaction.guild.id), {})
         auto = g.get("roster_autopost")
         msg = None
@@ -703,19 +700,16 @@ class TicketCog(commands.Cog):
                 msg = None
     
         if msg:
-            # Edit existing message
             if len(embeds) == 1:
                 await msg.edit(embed=embeds[0], content=None)
             else:
                 await msg.edit(embeds=embeds, content=None)
         else:
-            # Send a fresh one
             if len(embeds) == 1:
                 msg = await channel.send(embed=embeds[0])
             else:
                 msg = await channel.send(embeds=embeds)
     
-            # Save the ID if we’re tracking auto messages
             if auto is not None:
                 auto["message_id"] = msg.id
                 save_config(self.config)
@@ -733,8 +727,8 @@ class TicketCog(commands.Cog):
         # If empty roster
         if not members:
             e = discord.Embed(
-                title="🎟️ Coaching Roster",
-                description="No one is on the roster yet.",
+                title="🎟️ Ticket Staff Roster",
+                description="No members are on the roster yet.",
                 color=discord.Color.gold(),
                 timestamp=discord.utils.utcnow()
             )
@@ -746,7 +740,7 @@ class TicketCog(commands.Cog):
         # Chunk into pages of 25
         for i in range(0, len(members), 25):
             e = discord.Embed(
-                title="🎟️ Coaching Roster",
+                title="🎟️ Ticket Staff Roster",
                 color=discord.Color.gold(),
                 timestamp=discord.utils.utcnow()
             )
@@ -758,13 +752,8 @@ class TicketCog(commands.Cog):
                 if member_obj:
                     display = member_obj.display_name
                     uname = member_obj.name
-                    # Avoid duplicate if display == username
-                    if display == uname:
-                        live_name = uname
-                    else:
-                        live_name = f"{display} ({uname})"
+                    live_name = uname if display == uname else f"{display} ({uname})"
                 else:
-                    # fallback to stored snapshot
                     live_name = data.get("name") or "Unknown"
     
                 name = live_name[:256]
@@ -833,13 +822,11 @@ class TicketCog(commands.Cog):
                 msg = None
     
         if msg:
-            # Edit the existing message
             if len(embeds) == 1:
                 await msg.edit(embed=embeds[0], content=None)
             else:
                 await msg.edit(embeds=embeds, content=None)
         else:
-            # Send a new message
             if len(embeds) == 1:
                 msg = await channel.send(embed=embeds[0])
             else:
@@ -880,7 +867,7 @@ class TicketCog(commands.Cog):
         save_config(self.config)
         await self.update_roster_message(guild_id)
 
-    # ---------- Claim role: config & syncing (NEW) ----------
+    # ---------- Claim role: config & syncing ----------
     def _get_claim_role(self, guild: discord.Guild) -> Optional[discord.Role]:
         gid = str(guild.id)
         rid = self.config.get(gid, {}).get("claim_role_id")
@@ -943,30 +930,24 @@ class TicketCog(commands.Cog):
         await interaction.response.send_message("🧹 Purging roster… this may take a moment.", ephemeral=True)
     
         removed = 0
-        self._suppress_sync = True  # 🔇 stop on_member_update churn
+        self._suppress_sync = True  # stop on_member_update churn
     
         try:
             if role:
-                # iterate over a COPY; gently pace to avoid 429s
                 for m in list(role.members):
                     try:
                         await m.remove_roles(role, reason="Roster purge")
                         removed += 1
                     except Exception:
                         pass
-                    # tiny pause reduces burst-rate 429s without being slow
                     await asyncio.sleep(0.15)
     
-            # Clear roster in one shot
             g["roster"] = {}
             save_config(self.config)
-    
-            # Single, final message update; prefer editing existing message
             await self.update_roster_message(guild.id, force_new=False)
     
         finally:
-            self._suppress_sync = False  # 🔊 re-enable
-            # One last refresh in case anything slipped during the window
+            self._suppress_sync = False
             await self.update_roster_message(guild.id, force_new=False)
     
         await interaction.followup.send(
@@ -1003,24 +984,22 @@ class TicketCog(commands.Cog):
         except Exception:
             return await interaction.response.send_message("⚠️ Could not fetch panel message.", ephemeral=True)
     
-        # Build new embed
         embed = discord.Embed(
             title=new_title,
             description=new_description,
             color=discord.Color.orange()
         )
-        # You could preserve the image if you want
-        embed.set_image(url="https://github.com/RobNel12/newbot/blob/ebd873540540ee4e71e96e63b8c753e2e03fb39f/coaching.jpg?raw=true")
+        # Keep or override banner
+        embed.set_image(url=panel.get("ticket_image_url") or DEFAULT_TICKET_BANNER_URL)
     
-        # Rebuild the panel view
         view = TicketPanelView(self, interaction.guild.id, panel_name)
     
         await msg.edit(embed=embed, view=view)
         await interaction.response.send_message(f"✅ Panel `{panel_name}` updated.", ephemeral=True)
 
     @app_commands.command(
-    name="ticket_image_set",
-    description="Set the large banner image shown on new ticket welcome messages"
+        name="ticket_image_set",
+        description="Set the large banner image shown on new ticket welcome messages"
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def ticket_image_set(
@@ -1077,11 +1056,11 @@ class TicketCog(commands.Cog):
         self.bot.add_view(TicketChannelView(0, self, None, None, 0))
         self.bot.add_view(ReviewView(self, None, 0, 0, None))
 
-    # ---------- Listeners to auto-sync when role changes (NEW) ----------
+    # ---------- Listeners to auto-sync when role changes ----------
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         if self._suppress_sync:
-            return  # skip churn during bulk operations (e.g., purge)
+            return
     
         role = self._get_claim_role(after.guild)
         if not role:
@@ -1089,7 +1068,7 @@ class TicketCog(commands.Cog):
         had = role in before.roles
         has = role in after.roles
         if had == has:
-            return  # no change
+            return
     
         g = self.config.setdefault(str(after.guild.id), {})
         roster = g.setdefault("roster", {})
