@@ -354,38 +354,14 @@ class TicketChannelView(discord.ui.View):
 
         await interaction.response.send_message(f"Ticket claimed by {interaction.user.mention}.")
 
-    @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, emoji="🔒", custom_id="ticket:close", row=0)
+   @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, emoji="🔒", custom_id="ticket:close", row=0)
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.closed:
             return await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
-        await self._lock_channel(interaction.channel, lock=True)
-        self.closed = True
-        await interaction.response.send_message("🔒 Ticket closed. Use **Reopen** to unlock or **Delete** to archive.", ephemeral=False)
 
-        opener = interaction.guild.get_member(self.opener_id)
-        opener_display = opener.mention if opener else f"<@{self.opener_id}>"
-        
-        claimer_member = interaction.guild.get_member(self.claimer_id) or interaction.user
-        claimer_display = claimer_member.mention
-        
-        await interaction.channel.send(
-            f"{opener_display}, please leave a review for {claimer_display}:",
-            view=ReviewView(
-                self.cog,
-                self.log_channel,
-                opener_id=self.opener_id,
-                staff_id=claimer_member.id,
-                log_msg=self.log_msg
-            )
-        )
-
-    @discord.ui.button(label="Reopen", style=discord.ButtonStyle.success, emoji="🔓", custom_id="ticket:reopen", row=0)
-    async def reopen_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not self.closed:
-            return await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
-        await self._lock_channel(interaction.channel, lock=False)
-        self.closed = False
-        await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=True)
+        # Ask for confirmation
+        view = ConfirmCloseView(self, interaction.user)
+        await interaction.response.send_message("Are you sure you want to close this ticket?", view=view, ephemeral=True)
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket:delete", row=0)
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -395,11 +371,8 @@ class TicketChannelView(discord.ui.View):
 
         # owner override (your ID)
         is_owner_override = interaction.user.id in OWNER_IDS
-
-        # admins always allowed
         allowed = interaction.user.guild_permissions.administrator or is_owner_override
 
-        # delete-roles allowed
         if not allowed:
             for rid in cfg.get("delete_roles", []):
                 role = interaction.guild.get_role(rid)
@@ -410,9 +383,22 @@ class TicketChannelView(discord.ui.View):
         if not allowed:
             return await interaction.response.send_message("You don't have permission to delete this ticket.", ephemeral=True)
 
-        await interaction.response.send_message("Archiving and deleting ticket…", ephemeral=True)
-        await asyncio.sleep(1)
-        await self._log_and_delete(interaction.channel, interaction.user)
+        # Ask for confirmation
+        view = ConfirmDeleteView(self, interaction.user)
+        await interaction.response.send_message(
+            "Are you sure you want to delete this ticket? It will be logged before deletion.",
+            view=view,
+            ephemeral=True
+        )
+
+
+    @discord.ui.button(label="Reopen", style=discord.ButtonStyle.success, emoji="🔓", custom_id="ticket:reopen", row=0)
+    async def reopen_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.closed:
+            return await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+        await self._lock_channel(interaction.channel, lock=False)
+        self.closed = False
+        await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=True)
 
 
     async def _lock_channel(self, channel: discord.TextChannel, lock: bool):
@@ -538,6 +524,65 @@ class TicketChannelView(discord.ui.View):
         # Show modal
         modal = FeedbackModal(self.cog, opener_id=self.opener_id, claimer_id=self.claimer_id, channel=interaction.channel)
         await interaction.response.send_modal(modal)
+
+# ---------- Confirmation Views ----------
+class ConfirmCloseView(discord.ui.View):
+    def __init__(self, parent: TicketChannelView, requester: discord.Member):
+        super().__init__(timeout=30)
+        self.parent = parent
+        self.requester = requester
+
+    @discord.ui.button(label="Confirm Close", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.requester:
+            return await interaction.response.send_message("Only the user who clicked close can confirm.", ephemeral=True)
+
+        await self.parent._lock_channel(interaction.channel, lock=True)
+        self.parent.closed = True
+        await interaction.response.edit_message(content="🔒 Ticket closed.", view=None)
+
+        opener = interaction.guild.get_member(self.parent.opener_id)
+        opener_display = opener.mention if opener else f"<@{self.parent.opener_id}>"
+        claimer_member = interaction.guild.get_member(self.parent.claimer_id) or interaction.user
+        claimer_display = claimer_member.mention
+
+        await interaction.channel.send(
+            f"{opener_display}, please leave a review for {claimer_display}:",
+            view=ReviewView(
+                self.parent.cog,
+                self.parent.log_channel,
+                opener_id=self.parent.opener_id,
+                staff_id=claimer_member.id,
+                log_msg=self.parent.log_msg
+            )
+        )
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.requester:
+            return await interaction.response.send_message("Only the user who clicked close can cancel.", ephemeral=True)
+        await interaction.response.edit_message(content="❌ Close cancelled.", view=None)
+
+
+class ConfirmDeleteView(discord.ui.View):
+    def __init__(self, parent: TicketChannelView, requester: discord.Member):
+        super().__init__(timeout=30)
+        self.parent = parent
+        self.requester = requester
+
+    @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.requester:
+            return await interaction.response.send_message("Only the user who clicked delete can confirm.", ephemeral=True)
+        await interaction.response.edit_message(content="🗑️ Deleting ticket…", view=None)
+        await asyncio.sleep(1)
+        await self.parent._log_and_delete(interaction.channel, interaction.user)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.requester:
+            return await interaction.response.send_message("Only the user who clicked delete can cancel.", ephemeral=True)
+        await interaction.response.edit_message(content="❌ Delete cancelled.", view=None)
 
 # ---------------- Review ----------------
 class ReviewView(discord.ui.View):
