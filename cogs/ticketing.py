@@ -354,7 +354,7 @@ class TicketChannelView(discord.ui.View):
 
         await interaction.response.send_message(f"Ticket claimed by {interaction.user.mention}.")
 
-   @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, emoji="🔒", custom_id="ticket:close", row=0)
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, emoji="🔒", custom_id="ticket:close", row=0)
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.closed:
             return await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
