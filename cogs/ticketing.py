@@ -513,34 +513,36 @@ class TicketChannelView(discord.ui.View):
         panel_chan = channel.guild.get_channel(meta.get("panel_channel_id", 0))
         panel_where = panel_chan.mention if panel_chan else "#unknown"
 
-        # 1) Upload to S3 for permanent link
-        # Key format: transcripts/<guild>/<ticket-###>-<channel>.html
-        guild_id = channel.guild.id
-        key = f"{S3_PREFIX}/{guild_id}/{fname}"
-        try:
-            transcript_url = s3_put_transcript_bytes(
-                key,
-                transcript_html.encode("utf-8"),
-                filename=fname,
-                content_type="text/html"
-            )
-        except (BotoCoreError, ClientError, RuntimeError) as e:
-            # Fall back to Discord file upload if S3 failed
-            transcript_url = None
-            print(f"[S3 upload failed] {e}")
-        
-        # 2) (Optional) still upload the file to Discord logs for convenience
+        # 1) Send file to logs (keeps Discord copy for safety)
         sent = await logs.send(file=transcript_file)
         
-        # 3) Build the view: prefer the permanent S3 URL; otherwise fall back to the Discord message jump
-        view = None
+        # 2) Prefer your permanent URL if you’ve added S3. Otherwise fall back to the attachment.
+        #    If you wired the S3 helper already, set transcript_url from S3; else keep the attachment URL.
+        try:
+            # If you integrated S3:
+            # guild_id = channel.guild.id
+            # key = f"{S3_PREFIX}/{guild_id}/{fname}"
+            # transcript_url = s3_put_transcript_bytes(key, transcript_html.encode("utf-8"),
+            #                                          filename=fname, content_type="text/html")
+            # If not using S3 yet, keep Discord’s attachment as a best-effort link:
+            transcript_url = sent.attachments[0].url if sent.attachments else None
+        except Exception as e:
+            print(f"[Transcript URL build failed] {e}")
+            transcript_url = None
+        
+        # 3) Always create a view and ALWAYS include a stable jump link
+        view = discord.ui.View()
+        
+        # Prefer permanent link if present
         if transcript_url:
-            view = discord.ui.View()
             view.add_item(discord.ui.Button(label="Download Transcript", url=transcript_url))
-        else:
-            # Fallback: non-expiring jump link to the message with the attachment
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
+        
+        # Always add a non-expiring jump-to-message button as fallback/backup
+        view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
+        
+        # 4) Send the embed + buttons
+        await logs.send(embed=embed, view=view)
+
 
 
 
@@ -602,7 +604,7 @@ class ConfirmCloseView(discord.ui.View):
     @discord.ui.button(label="Confirm Close", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.requester:
-            return await interaction.response.send_message("Only the user who clicked close can confirm.", ephemeral=True)
+            return await interaction.response.send_message("Only the user who clicked close can confirm.", ephemeral=False)
 
         await self.parent._lock_channel(interaction.channel, lock=True)
         self.parent.closed = True
