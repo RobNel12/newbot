@@ -511,49 +511,46 @@ class TicketChannelView(discord.ui.View):
         panel_chan = channel.guild.get_channel(meta.get("panel_channel_id", 0))
         panel_where = panel_chan.mention if panel_chan else "#unknown"
 
-        # 1) Send file to logs (keeps Discord copy for safety)
+       # Upload transcript file to logs
         sent = await logs.send(file=transcript_file)
+        transcript_url = sent.attachments[0].url if sent.attachments else None
         
-        # 2) Prefer your permanent URL if you’ve added S3. Otherwise fall back to the attachment.
-        #    If you wired the S3 helper already, set transcript_url from S3; else keep the attachment URL.
-        try:
-            # If you integrated S3:
-            guild_id = channel.guild.id
-            key = f"{S3_PREFIX}/{guild_id}/{fname}"
-            transcript_url = s3_put_transcript_bytes(key, transcript_html.encode("utf-8"),
-                                                     filename=fname, content_type="text/html")
-            # If not using S3 yet, keep Discord’s attachment as a best-effort link:
-            # transcript_url = sent.attachments[0].url if sent.attachments else None
-        except Exception as e:
-            print(f"[Transcript URL build failed] {e}")
-            transcript_url = None
-        
-        # 3) Always create a view and ALWAYS include a stable jump link
-        view = discord.ui.View()
-        
-        # Prefer permanent link if present
-        if transcript_url:
-            view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
-        
-        # Always add a non-expiring jump-to-message button as fallback/backup
-        view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
-        
-        # 4) Send the embed + buttons
-        await logs.send(embed=embed, view=view)
-
-
-
-
-        # Build embed to match your example
+        # Build the embed
         embed = discord.Embed(
             title=f"Ticket #{ticket_no:03d} in {panel_name.title() if panel_name else '?'}!",
             color=discord.Color.blurple(),
             timestamp=discord.utils.utcnow(),
         )
-        embed.add_field(name="Type", value=f"from **{panel_name.title() if panel_name else '?'}** in {panel_where}", inline=False)
+        embed.add_field(
+            name="Type",
+            value=f"from **{panel_name.title() if panel_name else '?'}** in {panel_where}",
+            inline=False,
+        )
         embed.add_field(name="Created by", value=f"{opener_display} {created_rel}", inline=True)
         embed.add_field(name="Deleted by", value=f"{closer_display} {deleted_rel}", inline=True)
         embed.add_field(name="Claimed by", value=claimers_display, inline=False)
+        
+        if counts:
+            lines = []
+            for uid, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]:
+                mem = channel.guild.get_member(uid)
+                name = mem.mention if mem else f"<@{uid}>"
+                lines.append(f"{c} messages by {name}")
+            embed.add_field(name="Participants", value="\n".join(lines), inline=False)
+        
+        # ✅ Always create a View
+        view = discord.ui.View()
+        
+        # Prefer permanent URL (if you set it from S3)
+        if transcript_url:
+            view.add_item(discord.ui.Button(label="Download Transcript", url=transcript_url))
+        
+        # Always add a stable jump link as backup
+        view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
+        
+        # Send embed + buttons
+        await logs.send(embed=embed, view=view)
+
 
         if counts:
             lines = []
