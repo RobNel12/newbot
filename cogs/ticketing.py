@@ -70,8 +70,6 @@ def s3_put_transcript_bytes(key: str, data: bytes, *, filename: str, content_typ
         "CacheControl": "public, max-age=31536000, immutable",
         "ContentDisposition": f'attachment; filename="{filename}"',
     }
-    if S3_PUBLIC_READ:
-        extra_args["ACL"] = "public-read"
 
     client = _s3_client()
     client.put_object(Bucket=S3_BUCKET, Key=key, Body=data, **extra_args)
