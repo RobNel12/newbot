@@ -520,12 +520,12 @@ class TicketChannelView(discord.ui.View):
         #    If you wired the S3 helper already, set transcript_url from S3; else keep the attachment URL.
         try:
             # If you integrated S3:
-            # guild_id = channel.guild.id
-            # key = f"{S3_PREFIX}/{guild_id}/{fname}"
-            # transcript_url = s3_put_transcript_bytes(key, transcript_html.encode("utf-8"),
-            #                                          filename=fname, content_type="text/html")
+            guild_id = channel.guild.id
+            key = f"{S3_PREFIX}/{guild_id}/{fname}"
+            transcript_url = s3_put_transcript_bytes(key, transcript_html.encode("utf-8"),
+                                                     filename=fname, content_type="text/html")
             # If not using S3 yet, keep Discord’s attachment as a best-effort link:
-            transcript_url = sent.attachments[0].url if sent.attachments else None
+            # transcript_url = sent.attachments[0].url if sent.attachments else None
         except Exception as e:
             print(f"[Transcript URL build failed] {e}")
             transcript_url = None
@@ -535,7 +535,7 @@ class TicketChannelView(discord.ui.View):
         
         # Prefer permanent link if present
         if transcript_url:
-            view.add_item(discord.ui.Button(label="Download Transcript", url=transcript_url))
+            view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
         
         # Always add a non-expiring jump-to-message button as fallback/backup
         view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
