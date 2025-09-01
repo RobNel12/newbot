@@ -2,11 +2,20 @@ import discord, json, os, asyncio, datetime, io, time
 from discord.ext import commands
 from discord import app_commands
 from typing import List, Optional, Dict
+
 import chat_exporter
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 CONFIG_FILE = "ticket_config.json"
 DEFAULT_TICKET_THUMB_URL  = "https://github.com/RobNel12/newbot/blob/main/coach_sword.png?raw=true"   # sword (thumbnail)
 DEFAULT_TICKET_BANNER_URL = "https://github.com/RobNel12/newbot/blob/main/coach_ticket.png?raw=true"   # knights (large image)
+
+S3_BUCKET      = os.getenv("TICKET_S3_BUCKET", "")  # required
+S3_BASE_URL    = os.getenv("TICKET_S3_BASE_URL")    # optional override (e.g. CloudFront)
+S3_PREFIX      = os.getenv("TICKET_S3_PREFIX", "transcripts")  # optional folder/prefix in bucket
+S3_PUBLIC_READ = os.getenv("TICKET_S3_PUBLIC_READ", "1") == "1"  # set to 0 if you don’t want public objects
 
 # who can always delete tickets (owner override)
 OWNER_IDS = {749469375282675752}  # ← replace with YOUR Discord user ID
@@ -42,6 +51,37 @@ def slugify(name: str, max_len: int = 90) -> str:
     if len(slug) > max_len:
         slug = slug[:max_len].rstrip("-_")
     return slug or "user"
+
+
+def _s3_client():
+    # Relies on AWS_* env vars or instance role
+    return boto3.client("s3")
+
+def s3_put_transcript_bytes(key: str, data: bytes, *, filename: str, content_type: str = "text/html") -> str:
+    """
+    Uploads transcript bytes to S3 under <key> and returns a permanent URL.
+    If S3_BASE_URL is set, returns S3_BASE_URL/<key>. Otherwise returns the S3 website-style URL.
+    """
+    if not S3_BUCKET:
+        raise RuntimeError("S3_BUCKET not configured")
+
+    extra_args = {
+        "ContentType": content_type,
+        "CacheControl": "public, max-age=31536000, immutable",
+        "ContentDisposition": f'attachment; filename="{filename}"',
+    }
+    if S3_PUBLIC_READ:
+        extra_args["ACL"] = "public-read"
+
+    client = _s3_client()
+    client.put_object(Bucket=S3_BUCKET, Key=key, Body=data, **extra_args)
+
+    if S3_BASE_URL:
+        # e.g. https://cdn.yourdomain.com/transcripts/...
+        return f"{S3_BASE_URL.rstrip('/')}/{key}"
+    # Fallback to virtual-hosted–style URL
+    region = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+    return f"https://{S3_BUCKET}.s3.{region}.amazonaws.com/{key}"
 
 # ---------------- Setup UI ----------------
 class TicketSetupView(discord.ui.View):
@@ -473,9 +513,36 @@ class TicketChannelView(discord.ui.View):
         panel_chan = channel.guild.get_channel(meta.get("panel_channel_id", 0))
         panel_where = panel_chan.mention if panel_chan else "#unknown"
 
-        # Upload the transcript file to LOGS channel
+        # 1) Upload to S3 for permanent link
+        # Key format: transcripts/<guild>/<ticket-###>-<channel>.html
+        guild_id = channel.guild.id
+        key = f"{S3_PREFIX}/{guild_id}/{fname}"
+        try:
+            transcript_url = s3_put_transcript_bytes(
+                key,
+                transcript_html.encode("utf-8"),
+                filename=fname,
+                content_type="text/html"
+            )
+        except (BotoCoreError, ClientError, RuntimeError) as e:
+            # Fall back to Discord file upload if S3 failed
+            transcript_url = None
+            print(f"[S3 upload failed] {e}")
+        
+        # 2) (Optional) still upload the file to Discord logs for convenience
         sent = await logs.send(file=transcript_file)
-        transcript_url = sent.attachments[0].url if sent.attachments else None
+        
+        # 3) Build the view: prefer the permanent S3 URL; otherwise fall back to the Discord message jump
+        view = None
+        if transcript_url:
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label="Download Transcript", url=transcript_url))
+        else:
+            # Fallback: non-expiring jump link to the message with the attachment
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
+
+
 
         # Build embed to match your example
         embed = discord.Embed(
