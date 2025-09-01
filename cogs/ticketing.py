@@ -457,48 +457,48 @@ class TicketChannelView(discord.ui.View):
                 if any(s in lc for s in ["opened a ticket!", "leave a review", "ticket closed", "archiving"]):
                     continue
             counts[msg.author.id] = counts.get(msg.author.id, 0) + 1
-
-        # Resolve the logs channel directly from panel config
+    
+        # Resolve the logs channel
         meta = self.cog.channel_meta.get(str(channel.id), {})
         panel_name = meta.get("panel_name")
         gconf = self.cog.config.get(str(channel.guild.id), {})
         panel_cfg = gconf.get("panels", {}).get(panel_name, {}) if panel_name else {}
         logs_id = panel_cfg.get("log_channel")
         logs = channel.guild.get_channel(logs_id) if logs_id else None
-
-        # If we can't find a logs channel, just delete and bail
+    
         if not logs:
             await channel.delete()
             return
-
-        # Export transcript HTML (DO NOT send to current channel)
+    
+        # Export transcript HTML
         transcript_html = await chat_exporter.export(
             channel,
             limit=None,
-            bot=self.cog.bot,  # helps with avatars/emojis/time formatting
+            bot=self.cog.bot
         )
         if not transcript_html:
             transcript_html = "<html><body><p>No transcript available.</p></body></html>"
-
-        # Build filename like transcript-000-opener[-claimer].html
+    
+        # Filename
         ticket_no = meta.get("ticket_number", 0)
         fname = f"transcript-{ticket_no:03d}-{channel.name.split('-', 1)[-1]}.html"
-        transcript_file = discord.File(io.BytesIO(transcript_html.encode("utf-8")), filename=fname)
-
-        # Prepare members and times
+        transcript_bytes = transcript_html.encode("utf-8")
+        transcript_file = discord.File(io.BytesIO(transcript_bytes), filename=fname)
+    
+        # Prepare member info
         opener = channel.guild.get_member(meta.get("opener_id", 0))
         opener_display = opener.mention if opener else f"<@{meta.get('opener_id')}>"
-
+    
         claimer_id = meta.get("claimer_id")
         if claimer_id:
             m = channel.guild.get_member(claimer_id)
             claimers_display = m.mention if m else f"<@{claimer_id}>"
         else:
             claimers_display = "None"
-
+    
         closer_display = deleted_by.mention if deleted_by else "Unknown"
-
-        # Opened/deleted relative times
+    
+        # Times
         opened_at = meta.get("opened_at")
         try:
             opened_dt = datetime.datetime.fromisoformat(opened_at)
@@ -506,16 +506,26 @@ class TicketChannelView(discord.ui.View):
             opened_dt = None
         created_rel = discord.utils.format_dt(opened_dt, "R") if opened_dt else "some time ago"
         deleted_rel = discord.utils.format_dt(discord.utils.utcnow(), "R")
-
-        # Panel message channel mention for "Type"
+    
+        # Panel channel mention
         panel_chan = channel.guild.get_channel(meta.get("panel_channel_id", 0))
         panel_where = panel_chan.mention if panel_chan else "#unknown"
-
-       # Upload transcript file to logs
-        sent = await logs.send(file=transcript_file)
-        transcript_url = sent.attachments[0].url if sent.attachments else None
-        
-        # Build the embed
+    
+        # ✅ Upload transcript to S3 first
+        guild_id = channel.guild.id
+        key = f"{S3_PREFIX}/{guild_id}/{fname}"
+        transcript_url = None
+        try:
+            transcript_url = s3_put_transcript_bytes(
+                key,
+                transcript_bytes,
+                filename=fname,
+                content_type="text/html"
+            )
+        except Exception as e:
+            print(f"[S3 upload failed] {e}")
+    
+        # Build embed
         embed = discord.Embed(
             title=f"Ticket #{ticket_no:03d} in {panel_name.title() if panel_name else '?'}!",
             color=discord.Color.blurple(),
@@ -529,7 +539,7 @@ class TicketChannelView(discord.ui.View):
         embed.add_field(name="Created by", value=f"{opener_display} {created_rel}", inline=True)
         embed.add_field(name="Deleted by", value=f"{closer_display} {deleted_rel}", inline=True)
         embed.add_field(name="Claimed by", value=claimers_display, inline=False)
-        
+    
         if counts:
             lines = []
             for uid, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]:
@@ -537,22 +547,18 @@ class TicketChannelView(discord.ui.View):
                 name = mem.mention if mem else f"<@{uid}>"
                 lines.append(f"{c} messages by {name}")
             embed.add_field(name="Participants", value="\n".join(lines), inline=False)
-        
-        # ✅ Always create a View
+    
+        # ✅ Always create a View with permanent S3 URL (if upload worked)
         view = discord.ui.View()
-        
-        # Prefer permanent URL (if you set it from S3)
         if transcript_url:
-            view.add_item(discord.ui.Button(label="Download Transcript", url=transcript_url))
-        
-        # Always add a stable jump link as backup
-        view.add_item(discord.ui.Button(label="Open Transcript Message", url=sent.jump_url))
-        
-        # Send embed + buttons
-        await logs.send(embed=embed, view=view)
-
-        # Finally delete the ticket channel itself
+            view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
+    
+        # Send one clean log message
+        await logs.send(file=transcript_file, embed=embed, view=view)
+    
+        # Delete the ticket channel
         await channel.delete()
+
 
     @discord.ui.button(label="DM Feedback to Opener", style=discord.ButtonStyle.primary, emoji="✉️", custom_id="ticket:feedback", row=1)
     async def dm_feedback(self, interaction: discord.Interaction, button: discord.ui.Button):
