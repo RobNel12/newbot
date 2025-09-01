@@ -551,23 +551,6 @@ class TicketChannelView(discord.ui.View):
         # Send embed + buttons
         await logs.send(embed=embed, view=view)
 
-
-        if counts:
-            lines = []
-            for uid, c in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:10]:
-                mem = channel.guild.get_member(uid)
-                name = mem.mention if mem else f"<@{uid}>"
-                lines.append(f"{c} messages by {name}")
-            embed.add_field(name="Participants", value="\n".join(lines), inline=False)
-
-        view = None
-        if transcript_url:
-            view = discord.ui.View()
-            view.add_item(discord.ui.Button(label="Transcript", url=transcript_url))
-
-        # Send the embed (no duplicate file) to the logs channel
-        await logs.send(embed=embed, view=view)
-
         # Finally delete the ticket channel itself
         await channel.delete()
 
