@@ -593,7 +593,7 @@ class ConfirmCloseView(discord.ui.View):
         await self.parent._lock_channel(interaction.channel, lock=True)
         self.parent.closed = True
         await interaction.response.edit_message(view=None)  # just remove the buttons quietly
-        await interaction.channel.send("🔒 Ticket closed by {interaction.user.mention}.")  # new public message
+        await interaction.channel.send("🔒 Ticket closed by <@{interaction.user.id}>.")  # new public message
 
         opener = interaction.guild.get_member(self.parent.opener_id)
         opener_display = opener.mention if opener else f"<@{self.parent.opener_id}>"
