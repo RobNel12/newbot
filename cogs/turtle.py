@@ -492,29 +492,42 @@ class ConfigPanel(discord.ui.View):
 
     # 🚫 Removed placeholder select that had options=[]
     # Use the dynamic picker instead:
+   # inside class ConfigPanel(discord.ui.View):
+
     @discord.ui.button(label="Pick Auto-role", style=discord.ButtonStyle.blurple)
     async def pick_autorole(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Build a dynamic select with up to 25 roles (Discord limit)
-        roles = [r for r in interaction.guild.roles if not r.managed and r < interaction.guild.me.top_role]
+        roles = [
+            r for r in interaction.guild.roles
+            if not r.managed and r < interaction.guild.me.top_role
+        ]
         roles = sorted(roles, key=lambda r: r.position, reverse=True)[:25]
+    
         if not roles:
             return await interaction.response.send_message("ℹ️ No eligible roles to select.", ephemeral=True)
-
+    
         options = [discord.SelectOption(label=r.name[:100], value=str(r.id)) for r in roles]
-
+    
+        class AutoRoleView(discord.ui.View):
+            def __init__(self, cog, cfg):
+                super().__init__(timeout=120)
+                self.cog = cog
+                self.cfg = cfg
+    
         class AutoRolePicker(discord.ui.Select):
             def __init__(self):
                 super().__init__(placeholder="Choose an auto-role…", min_values=1, max_values=1, options=options)
-
+    
             async def callback(self, itx: discord.Interaction):
                 rid = int(self.values[0])
+                # save selection on the panel's config
                 self.view.cfg.autorole_id = rid
                 await self.view.cog._save()
                 await itx.response.send_message(f"✅ Auto-role set to <@&{rid}>.", ephemeral=True)
+    
+        v = AutoRoleView(self.cog, self.cfg)  # <-- carries cfg/cog
+        v.add_item(AutoRolePicker())
+        await interaction.response.send_message("Select a role:", view=v, ephemeral=True)
 
-        dyn_view = discord.ui.View(timeout=120)
-        dyn_view.add_item(AutoRolePicker())
-        await interaction.response.send_message("Select a role:", view=dyn_view, ephemeral=True)
 
 
 class SetChannelModal(discord.ui.Modal, title="Set Channel"):
