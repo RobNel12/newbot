@@ -9,7 +9,7 @@ CONFIG_FILE = "ticket_config.json"
 
 # Neutral default artwork (server owners can override with /ticket_image_set and /ticket_thumb_set)
 DEFAULT_TICKET_THUMB_URL  = "https://example.com/ticket-thumb.png"
-DEFAULT_TICKET_BANNER_URL = "https://example.com/ticket-banner.png"
+DEFAULT_TICKET_BANNER_URL = ""
 
 # Who can always delete tickets (owner override). Leave empty or add your Discord user IDs.
 OWNER_IDS = set()
