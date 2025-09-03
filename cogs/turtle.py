@@ -177,7 +177,7 @@ class GreetRoles(commands.Cog):
         # Auto-role
         if cfg.autorole_id:
             role = member.guild.get_role(cfg.autorole_id)
-            if role:
+            if role and member.guild.me and role < member.guild.me.top_role:
                 try:
                     await member.add_roles(role, reason="Auto-role on join")
                 except discord.Forbidden:
@@ -215,7 +215,7 @@ class GreetRoles(commands.Cog):
     # Use RAW events to handle uncached messages
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        if payload.guild_id is None or payload.user_id == self.bot.user.id:
+        if payload.guild_id is None or not self.bot.user or payload.user_id == self.bot.user.id:
             return
         guild = self.bot.get_guild(payload.guild_id)
         if not guild:
@@ -490,19 +490,17 @@ class ConfigPanel(discord.ui.View):
         await self.cog._save()
         await interaction.response.send_message(f"Leave is now **{'ENABLED' if self.cfg.leave_enabled else 'DISABLED'}**.", ephemeral=True)
 
-    @discord.ui.select(placeholder="Set Auto-role…", min_values=1, max_values=1, options=[])
-    async def autorole_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        # This placeholder select will be populated dynamically on callback.
-        pass
-
+    # 🚫 Removed placeholder select that had options=[]
+    # Use the dynamic picker instead:
     @discord.ui.button(label="Pick Auto-role", style=discord.ButtonStyle.blurple)
     async def pick_autorole(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Build a dynamic select with up to 25 roles (Discord limit)
-        options = []
         roles = [r for r in interaction.guild.roles if not r.managed and r < interaction.guild.me.top_role]
         roles = sorted(roles, key=lambda r: r.position, reverse=True)[:25]
-        for r in roles:
-            options.append(discord.SelectOption(label=r.name[:100], value=str(r.id)))
+        if not roles:
+            return await interaction.response.send_message("ℹ️ No eligible roles to select.", ephemeral=True)
+
+        options = [discord.SelectOption(label=r.name[:100], value=str(r.id)) for r in roles]
 
         class AutoRolePicker(discord.ui.Select):
             def __init__(self):
@@ -530,7 +528,7 @@ class SetChannelModal(discord.ui.Modal, title="Set Channel"):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-            cid = int(str(self.channel_id))
+            cid = int(self.channel_id.value)
         except ValueError:
             return await interaction.response.send_message("❌ Invalid channel ID.", ephemeral=True)
         if self.kind == "welcome":
@@ -559,7 +557,7 @@ class SetMessageModal(discord.ui.Modal, title="Set Message Template"):
         self.kind = kind
 
     async def on_submit(self, interaction: discord.Interaction):
-        txt = str(self.message)
+        txt = self.message.value
         if self.kind == "welcome":
             self.cfg.welcome_message = txt
             label = "Welcome"
