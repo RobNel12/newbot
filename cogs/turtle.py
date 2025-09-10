@@ -100,8 +100,7 @@ class ReactionRoles(commands.Cog):
                 lines.append(f"{emoji_str} ➜ {role.mention} (**{role.name}**)")
             else:
                 lines.append(f"{emoji_str} ➜ **Deleted Role** (`{role_id}`)")
-        text = "
-".join(lines)
+        text = "\n".join(lines)
         return (text[:1019] + "…") if len(text) > 1024 else text
 
     async def _update_rr_embed_view(self, guild: discord.Guild, message: discord.Message, cfg: GuildConfig) -> None:
