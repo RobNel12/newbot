@@ -72,8 +72,6 @@ class ReactionRoles(commands.Cog):
         self.bot = bot
         self.store = Store(STORAGE_PATH)
         self.store.load()
-        # Register the group with this bot's tree
-        self.bot.tree.add_command(self.reactionroles)
 
     @staticmethod
     def _norm_emoji(emoji: str) -> str:
