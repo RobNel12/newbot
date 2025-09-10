@@ -1,14 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Reaction Roles Cog (rewritten, fixed)
-
-- /reactionroles create: posts an embed with a "React for Roles" field
-- /reactionroles add: maps emoji -> role for a specific message and updates the embed
-- /reactionroles remove: removes a mapping and updates the embed
-- /reactionroles list: shows the mappings exactly as the embed does
-- on_raw_reaction_add/on_raw_reaction_remove: grants/removes roles based on mappings
-
-Compatible with discord.py 2.3+
+Reaction Roles Cog (rewritten, fixed group reference)
 """
 from __future__ import annotations
 
@@ -73,12 +65,15 @@ class Store:
         return self.guilds[guild_id]
 
 class ReactionRoles(commands.Cog):
+    # Define the slash group as a CLASS ATTRIBUTE so it exists at class definition time
+    reactionroles = app_commands.Group(name="reactionroles", description="Manage reaction role messages")
+
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.store = Store(STORAGE_PATH)
         self.store.load()
-        self.group = app_commands.Group(name="reactionroles", description="Manage reaction role messages")
-        self.bot.tree.add_command(self.group)
+        # Register the group with this bot's tree
+        self.bot.tree.add_command(self.reactionroles)
 
     @staticmethod
     def _norm_emoji(emoji: str) -> str:
@@ -105,7 +100,8 @@ class ReactionRoles(commands.Cog):
                 lines.append(f"{emoji_str} ➜ {role.mention} (**{role.name}**)")
             else:
                 lines.append(f"{emoji_str} ➜ **Deleted Role** (`{role_id}`)")
-        text = "\n".join(lines)
+        text = "
+".join(lines)
         return (text[:1019] + "…") if len(text) > 1024 else text
 
     async def _update_rr_embed_view(self, guild: discord.Guild, message: discord.Message, cfg: GuildConfig) -> None:
@@ -125,14 +121,15 @@ class ReactionRoles(commands.Cog):
         except Exception:
             pass
 
-    @group.command(name="create", description="Create a new reaction-role embed")
+    # --------------------------- Slash Commands (under /reactionroles) ---------------------------
+    @reactionroles.command(name="create", description="Create a new reaction-role embed")
     async def rr_create(self, interaction: discord.Interaction, channel: discord.TextChannel, title: str, description: str):
         embed = discord.Embed(title=title, description=description, color=discord.Color.blurple())
         embed.add_field(name="React for Roles", value="*(No emoji → role mappings yet. Use `/reactionroles add`.)*", inline=False)
         await channel.send(embed=embed)
         await interaction.response.send_message("✅ Created reaction-role message.", ephemeral=True)
 
-    @group.command(name="add", description="Map an emoji to a role")
+    @reactionroles.command(name="add", description="Map an emoji to a role")
     async def rr_add(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str, emoji: str, role: discord.Role):
         guild = interaction.guild
         mid = int(message_id)
@@ -147,7 +144,7 @@ class ReactionRoles(commands.Cog):
         await self._update_rr_embed_view(guild, message, cfg)
         await interaction.response.send_message(f"✅ Mapped {emoji} to {role.name}.", ephemeral=True)
 
-    @group.command(name="remove", description="Remove an emoji mapping")
+    @reactionroles.command(name="remove", description="Remove an emoji mapping")
     async def rr_remove(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str, emoji: str):
         guild = interaction.guild
         mid = int(message_id)
@@ -163,7 +160,7 @@ class ReactionRoles(commands.Cog):
         else:
             await interaction.response.send_message("⚠️ No mapping found.", ephemeral=True)
 
-    @group.command(name="list", description="List mappings for a message")
+    @reactionroles.command(name="list", description="List mappings for a message")
     async def rr_list(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str):
         guild = interaction.guild
         mid = int(message_id)
@@ -172,6 +169,7 @@ class ReactionRoles(commands.Cog):
         embed = discord.Embed(title="Reaction-role Mappings", description=text, color=discord.Color.blurple())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    # --------------------------- Reaction Listeners ---------------------------
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         guild = self.bot.get_guild(payload.guild_id)
