@@ -27,6 +27,7 @@ CONFIG_PATH = "welcome_config.json"
 class WelcomeConfig:
     # Back-compat single channel (used as fallback if specific ones aren't set)
     channel_id: Optional[int] = None
+    log_join_ping_role_id: Optional[int] = None
 
     # Separate channels
     join_channel_id: Optional[int] = None
@@ -242,7 +243,7 @@ class Turtle(commands.Cog):
         # Optional basic log
         if wc.log_join:
             log_ch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else target_ch
-            line = f"JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}."
+            ping = f"<@&{wc.log_join_ping_role_id}>" if wc.log_join_ping_role_id else ""line = f"{ping} JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}."
             await self._send_basic_log(log_ch, line)
 
     async def _send_leave(self, member: discord.Member) -> None:
@@ -316,6 +317,7 @@ class Turtle(commands.Cog):
         log_leave: Optional[bool] = None,
         log_join_channel: Optional[discord.TextChannel] = None,
         log_leave_channel: Optional[discord.TextChannel] = None,
+        log_join_ping_role: Optional[discord.Role] = None,
         join_title: Optional[str] = None,
         join_message: Optional[str] = None,
         join_image_url: Optional[str] = None,
@@ -348,6 +350,8 @@ class Turtle(commands.Cog):
             wc.log_join_channel_id = log_join_channel.id
         if log_leave_channel is not None:
             wc.log_leave_channel_id = log_leave_channel.id
+        if log_join_ping_role is not None:
+            wc.log_join_ping_role_id = log_join_ping_role.id
 
         # Content
         if join_title is not None:
@@ -429,6 +433,7 @@ class Turtle(commands.Cog):
             f"• **Ignore bots:** {'Yes' if wc.autorole_ignore_bots else 'No'}",
             "",
             "_Placeholders: {member} (mention), {name}, {guild}, {count}_",
+            pr = guild.get_role(wc.log_join_ping_role_id) if wc.log_join_ping_role_id else None f"• **Join log ping:** {pr.mention if pr else '*None*'}"
         ]
 
         embed = discord.Embed(
