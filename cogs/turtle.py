@@ -440,6 +440,58 @@ class Turtle(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+    @welcome.command(name="test", description="Send a test welcome/leave preview (and logs if enabled)")
+    async def welcome_test(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            return await interaction.response.send_message(
+                "This command can only be used in a server.", ephemeral=True
+            )
+
+        guild = interaction.guild
+        wc = self.store.cfg(guild.id).welcome
+
+        # Use the command invoker as the "fake new member"
+        member = guild.get_member(interaction.user.id) or interaction.user  # type: ignore
+
+        sent_any = False
+
+        # --- Test join preview ---
+        jch = self._choose_join_channel(guild, wc)
+        if isinstance(jch, discord.TextChannel):
+            embed = self._build_embed(wc.join_title, wc.join_message, wc.join_image_url, member, guild)
+            await jch.send(content="**[TEST]** This is how a join message will look:", embed=embed)
+            sent_any = True
+
+            if wc.log_join:
+                ljch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else jch
+                ping = f"<@&{wc.log_join_ping_role_id}>" if getattr(wc, "log_join_ping_role_id", None) else ""
+                await self._send_basic_log(
+                    ljch,
+                    f"{ping} [TEST] JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}.",
+                )
+
+        # --- Test leave preview ---
+        lch = self._choose_leave_channel(guild, wc)
+        if isinstance(lch, discord.TextChannel):
+            embed = self._build_embed(wc.leave_title, wc.leave_message, wc.leave_image_url, member, guild)
+            await lch.send(content="**[TEST]** This is how a leave message will look:", embed=embed)
+            sent_any = True
+
+            if wc.log_leave:
+                llch = guild.get_channel(wc.log_leave_channel_id) if wc.log_leave_channel_id else lch
+                await self._send_basic_log(
+                    llch,
+                    f"[TEST] LEAVE: {getattr(member, 'display_name', member.name)} ({member.id}) left. Members now: {guild.member_count}.",
+                )
+
+        if not sent_any:
+            return await interaction.response.send_message(
+                "⚠️ No join/leave channels are configured. Use `/welcome set` first.", ephemeral=True
+            )
+
+        await interaction.response.send_message("✅ Test messages sent.", ephemeral=True)
+
+
 # -----------------------------
 # Extension setup
 # -----------------------------
