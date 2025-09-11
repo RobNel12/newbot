@@ -157,7 +157,8 @@ class ModLog(commands.Cog):
 
     def _base_embed(self, guild: discord.Guild, title: str, color: int = 0x2B2D31) -> discord.Embed:
         e = discord.Embed(title=title, color=color, timestamp=datetime.now(timezone.utc))
-        e.set_footer(text=f"{guild.name}", icon_url=getattr(guild.icon, "url", discord.Embed.Empty))
+        icon_url = guild.icon.url if getattr(guild, "icon", None) else None
+        e.set_footer(text=guild.name, icon_url=icon_url)
         return e
 
     # ---------- Slash commands ----------
