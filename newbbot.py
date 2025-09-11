@@ -33,6 +33,7 @@ class ModBot(commands.Bot):
         await self.load_extension("cogs.moderation")
         await self.load_extension("cogs.turtle")
         await self.load_extension("cogs.rr")
+        await self.load_extension("cogs.logging")
 
         # Global sync (slower rollout, ~1h but necessary for all guilds)
         await self.tree.sync()
