@@ -397,57 +397,6 @@ class Turtle(commands.Cog):
     async def welcome_show(self, interaction: discord.Interaction):
         if interaction.guild is None:
             return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
-
-        guild = interaction.guild
-        wc = self.store.cfg(guild.id).welcome
-
-        jch = guild.get_channel(wc.join_channel_id or wc.channel_id) if (wc.join_channel_id or wc.channel_id) else None
-        lch = guild.get_channel(wc.leave_channel_id or wc.channel_id) if (wc.leave_channel_id or wc.channel_id) else None
-        ljch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else None
-        llch = guild.get_channel(wc.log_leave_channel_id) if wc.log_leave_channel_id else None
-        arole = guild.get_role(wc.autorole_role_id) if wc.autorole_role_id else None
-
-        desc = [
-            "**Channels**",
-            f"• **Join embeds:** {jch.mention if isinstance(jch, discord.TextChannel) else '*Not set*'}",
-            f"• **Leave embeds:** {lch.mention if isinstance(lch, discord.TextChannel) else '*Not set*'}",
-            "",
-            "**Logging** (basic text, no embeds)",
-            f"• **Join logs:** {'ON' if wc.log_join else 'OFF'}"
-            + (f" → {ljch.mention}" if isinstance(ljch, discord.TextChannel) else (" → *join channel*" if wc.log_join else "")),
-            f"• **Leave logs:** {'ON' if wc.log_leave else 'OFF'}"
-            + (f" → {llch.mention}" if isinstance(llch, discord.TextChannel) else (" → *leave channel*" if wc.log_leave else "")),
-            "",
-            "**Welcome (join) message**",
-            f"• **Title:** {wc.join_title}",
-            f"• **Message:** {wc.join_message}",
-            f"• **Image:** {wc.join_image_url or '*None*'}",
-            "",
-            "**Leave message**",
-            f"• **Title:** {wc.leave_title}",
-            f"• **Message:** {wc.leave_message}",
-            f"• **Image:** {wc.leave_image_url or '*None*'}",
-            "",
-            "**Auto-Role on Join**",
-            f"• **Enabled:** {'Yes' if wc.autorole_on else 'No'}",
-            f"• **Role:** {arole.mention if arole else '*None*'}",
-            f"• **Ignore bots:** {'Yes' if wc.autorole_ignore_bots else 'No'}",
-            "",
-            "_Placeholders: {member} (mention), {name}, {guild}, {count}_",
-            pr = guild.get_role(wc.log_join_ping_role_id) if wc.log_join_ping_role_id else None f"• **Join log ping:** {pr.mention if pr else '*None*'}"
-        ]
-
-        embed = discord.Embed(
-            title="Welcome/Leave Configuration",
-            description="\n".join(desc),
-            color=discord.Color.blurple(),
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @welcome.command(name="show", description="Show the current welcome/leave configuration")
-    async def welcome_show(self, interaction: discord.Interaction):
-        if interaction.guild is None:
-            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
     
         guild = interaction.guild
         wc = self.store.cfg(guild.id).welcome
