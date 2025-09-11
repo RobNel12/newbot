@@ -240,11 +240,12 @@ class Turtle(commands.Cog):
             except discord.Forbidden:
                 pass
 
-        # Optional basic log
+        # inside _send_welcome, in the "Optional basic log" block
         if wc.log_join:
             log_ch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else target_ch
-            ping = f"<@&{wc.log_join_ping_role_id}>" if wc.log_join_ping_role_id else ""line = f"{ping} JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}."
-            await self._send_basic_log(log_ch, line)
+            ping = f"<@&{wc.log_join_ping_role_id}>" if getattr(wc, "log_join_ping_role_id", None) else ""
+            log_line = f"{ping} JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}."
+            await self._send_basic_log(log_ch, log_line)
 
     async def _send_leave(self, member: discord.Member) -> None:
         guild = member.guild
@@ -469,9 +470,10 @@ class Turtle(commands.Cog):
             sent_any = True
             if wc.log_join:
                 ljch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else jch
+                ping = f"<@&{wc.log_join_ping_role_id}>" if getattr(wc, "log_join_ping_role_id", None) else ""
                 await self._send_basic_log(
                     ljch,
-                    f"[TEST] JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}.",
+                    f"{ping} [TEST] JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}.",
                 )
 
         # Leave preview
