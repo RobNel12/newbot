@@ -1,299 +1,355 @@
-# -*- coding: utf-8 -*-
-"""
-Reaction Roles + Welcome/Leave Cog
-- Keeps your Reaction Roles functionality
-- Adds configurable Welcome/Leave embeds with /welcome commands and testing
-"""
+# turtle.py
+# Requires discord.py 2.x and members intent enabled in your bot.
+# In your main bot file, ensure Intents.members = True.
+# Example:
+# intents = discord.Intents.default()
+# intents.members = True
+# bot = commands.Bot(command_prefix="!", intents=intents)
+
 from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-STORAGE_PATH = os.path.join("data", "reaction_roles.json")
+CONFIG_PATH = "welcome_config.json"
 
-# --------------------------- Data Models & Store ---------------------------
 
+# -----------------------------
+# Storage
+# -----------------------------
 @dataclass
 class WelcomeConfig:
-    # Common
+    # Back-compat single channel (used as fallback if specific ones aren't set)
     channel_id: Optional[int] = None
 
-    # Join
+    # Separate channels
+    join_channel_id: Optional[int] = None
+    leave_channel_id: Optional[int] = None
+
+    # Logging toggles + optional separate log channels (basic text, no embed)
+    log_join: bool = False
+    log_leave: bool = False
+    log_join_channel_id: Optional[int] = None
+    log_leave_channel_id: Optional[int] = None
+
+    # Content for join
     join_title: str = "Welcome to {guild}!"
     join_message: str = "Hey {member}, you’re member #{count}! Make yourself at home."
     join_image_url: Optional[str] = None
 
-    # Leave
+    # Content for leave
     leave_title: str = "Goodbye, {name}"
     leave_message: str = "{name} has left {guild}. We’re now {count} strong."
     leave_image_url: Optional[str] = None
 
+    # --- NEW: Auto-role assignment on join ---
+    autorole_on: bool = False
+    autorole_role_id: Optional[int] = None
+    autorole_ignore_bots: bool = True
+
+
 @dataclass
 class GuildConfig:
-    # Existing reaction roles mapping
-    reaction_roles: Dict[str, Dict[str, int]] = field(default_factory=dict)
-    # New welcome/leave configuration
-    welcome: WelcomeConfig = field(default_factory=WelcomeConfig)
+    welcome: WelcomeConfig
 
-    # ---- Reaction-roles helpers ----
-    def set_mapping(self, message_id: int, emoji_str: str, role_id: int) -> None:
-        self.reaction_roles.setdefault(str(message_id), {})[emoji_str] = role_id
-
-    def remove_mapping(self, message_id: int, emoji_str: str) -> bool:
-        key = str(message_id)
-        if key not in self.reaction_roles:
-            return False
-        removed = self.reaction_roles[key].pop(emoji_str, None)
-        if not self.reaction_roles[key]:
-            self.reaction_roles.pop(key, None)
-        return removed is not None
-
-    def get_for_message(self, message_id: int) -> Dict[str, int]:
-        return self.reaction_roles.get(str(message_id), {})
 
 class Store:
-    def __init__(self, path: str) -> None:
+    def __init__(self, path: str = CONFIG_PATH):
         self.path = path
-        self.guilds: Dict[int, GuildConfig] = {}
-
-    def _ensure_dirs(self) -> None:
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        self._data: Dict[str, Any] = {}
+        self._guild_cache: Dict[int, GuildConfig] = {}
+        self.load()
 
     def load(self) -> None:
-        self._ensure_dirs()
-        if not os.path.exists(self.path):
-            self.guilds = {}
-            return
-        with open(self.path, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-        # Backward/forward compatible load
-        converted: Dict[int, GuildConfig] = {}
-        for gid_str, cfg in raw.items():
-            gid = int(gid_str)
-            rr = cfg.get("reaction_roles", {})
-            w_raw = cfg.get("welcome", {})
-            welcome = WelcomeConfig(**w_raw) if isinstance(w_raw, dict) else WelcomeConfig()
-            converted[gid] = GuildConfig(reaction_roles=rr, welcome=welcome)
-        self.guilds = converted
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self._data = json.load(f)
+            except Exception:
+                self._data = {}
+        else:
+            self._data = {}
 
     async def save(self) -> None:
-        self._ensure_dirs()
-        # Dataclasses to dicts (and ensure keys are strings for JSON)
-        raw = {}
-        for gid, cfg in self.guilds.items():
-            raw[str(gid)] = {
-                "reaction_roles": cfg.reaction_roles,
-                "welcome": asdict(cfg.welcome),
+        serializable: Dict[str, Any] = {}
+        # Merge cache back into data
+        for gid, gc in self._guild_cache.items():
+            serializable[str(gid)] = {
+                "welcome": {
+                    "channel_id": gc.welcome.channel_id,
+                    "join_channel_id": gc.welcome.join_channel_id,
+                    "leave_channel_id": gc.welcome.leave_channel_id,
+                    "log_join": gc.welcome.log_join,
+                    "log_leave": gc.welcome.log_leave,
+                    "log_join_channel_id": gc.welcome.log_join_channel_id,
+                    "log_leave_channel_id": gc.welcome.log_leave_channel_id,
+                    "join_title": gc.welcome.join_title,
+                    "join_message": gc.welcome.join_message,
+                    "join_image_url": gc.welcome.join_image_url,
+                    "leave_title": gc.welcome.leave_title,
+                    "leave_message": gc.welcome.leave_message,
+                    "leave_image_url": gc.welcome.leave_image_url,
+                    "autorole_on": gc.welcome.autorole_on,
+                    "autorole_role_id": gc.welcome.autorole_role_id,
+                    "autorole_ignore_bots": gc.welcome.autorole_ignore_bots,
+                }
             }
-        tmp = self.path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(raw, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, self.path)
+        # Include anything we didn't touch this session
+        for k, v in self._data.items():
+            if k not in serializable:
+                serializable[k] = v
+
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, ensure_ascii=False, indent=2)
+        self._data = serializable
 
     def cfg(self, guild_id: int) -> GuildConfig:
-        if guild_id not in self.guilds:
-            self.guilds[guild_id] = GuildConfig()
-        return self.guilds[guild_id]
+        if guild_id in self._guild_cache:
+            return self._guild_cache[guild_id]
 
-# --------------------------- Cog ---------------------------
+        raw = self._data.get(str(guild_id)) or {}
+        wraw = raw.get("welcome") or {}
+        wc = WelcomeConfig(
+            channel_id=wraw.get("channel_id"),
+            join_channel_id=wraw.get("join_channel_id"),
+            leave_channel_id=wraw.get("leave_channel_id"),
+            log_join=bool(wraw.get("log_join", False)),
+            log_leave=bool(wraw.get("log_leave", False)),
+            log_join_channel_id=wraw.get("log_join_channel_id"),
+            log_leave_channel_id=wraw.get("log_leave_channel_id"),
+            join_title=wraw.get("join_title", "Welcome to {guild}!"),
+            join_message=wraw.get("join_message", "Hey {member}, you’re member #{count}! Make yourself at home."),
+            join_image_url=wraw.get("join_image_url"),
+            leave_title=wraw.get("leave_title", "Goodbye, {name}"),
+            leave_message=wraw.get("leave_message", "{name} has left {guild}. We’re now {count} strong."),
+            leave_image_url=wraw.get("leave_image_url"),
+            autorole_on=bool(wraw.get("autorole_on", False)),
+            autorole_role_id=wraw.get("autorole_role_id"),
+            autorole_ignore_bots=bool(wraw.get("autorole_ignore_bots", True)),
+        )
+        gc = GuildConfig(welcome=wc)
+        self._guild_cache[guild_id] = gc
+        return gc
 
-class ReactionRoles(commands.Cog):
-    # Existing slash group
-    reactionroles = app_commands.Group(name="reactionroles", description="Manage reaction role messages")
-    # New slash group
-    welcome = app_commands.Group(name="welcome", description="Configure welcome/leave messages")
 
-    def __init__(self, bot: commands.Bot) -> None:
+# -----------------------------
+# Cog
+# -----------------------------
+class Turtle(commands.Cog):
+    """Welcome / Leave messages with optional basic logging + auto-role on join."""
+
+    # Slash command group: /welcome
+    welcome = app_commands.Group(name="welcome", description="Configure welcome (join) & leave messages")
+
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.store = Store(STORAGE_PATH)
-        self.store.load()
+        self.store = Store()
 
-    # ======== Utility (shared) ========
+    # ------------- Utilities -------------
 
     @staticmethod
-    def _norm_emoji(emoji: str) -> str:
-        try:
-            pe = discord.PartialEmoji.from_str(emoji)
-            return str(pe)
-        except Exception:
-            return emoji.strip()
-
-    async def _fetch_message(self, channel: discord.TextChannel, message_id: int) -> Optional[discord.Message]:
-        try:
-            return await channel.fetch_message(message_id)
-        except discord.NotFound:
-            return None
-
-    def _rr_lines(self, guild: discord.Guild, cfg: GuildConfig, message_id: int) -> str:
-        mappings = cfg.get_for_message(message_id)
-        if not mappings:
-            return "*(No emoji → role mappings yet. Use `/reactionroles add`.)*"
-        lines = []
-        for emoji_str, role_id in mappings.items():
-            role = guild.get_role(role_id)
-            if role:
-                lines.append(f"{emoji_str} ⟶ {role.mention} (**{role.name}**)")
-            else:
-                lines.append(f"{emoji_str} ⟶ **Deleted Role** (`{role_id}`)")
-        text = "\n".join(lines)
-        return (text[:1019] + "…") if len(text) > 1024 else text
-
-    async def _update_rr_embed_view(self, guild: discord.Guild, message: discord.Message, cfg: GuildConfig) -> None:
-        base = message.embeds[0] if message.embeds else discord.Embed(
-            title="Reaction Roles", description="React to this message to get roles.", color=discord.Color.blurple()
-        )
-        new = discord.Embed(title=base.title, description=base.description, color=base.color or discord.Color.blurple())
-        for f in base.fields:
-            if f.name.strip().lower() != "react for roles":
-                new.add_field(name=f.name, value=f.value, inline=f.inline)
-        new.add_field(name="React for Roles", value=self._rr_lines(guild, cfg, message.id), inline=False)
-        await message.edit(embed=new)
-
-    async def _ensure_reaction(self, message: discord.Message, emoji_str: str) -> None:
-        try:
-            await message.add_reaction(discord.PartialEmoji.from_str(emoji_str))
-        except Exception:
-            pass
-
-    # ======== Welcome/Leave helpers ========
-
-    def _format(self, template: str, member: discord.abc.User, guild: discord.Guild) -> str:
-        # Safely format placeholders
-        values = {
+    def _placeholders(member: discord.abc.User | discord.Member, guild: discord.Guild) -> Dict[str, str]:
+        name = getattr(member, "display_name", member.name)
+        return {
             "member": member.mention,
-            "name": getattr(member, "display_name", member.name),
+            "name": name,
             "guild": guild.name,
-            "count": guild.member_count,
+            "count": str(guild.member_count or 0),
         }
-        try:
-            return template.format(**values)
-        except Exception:
-            # If user provides malformed braces, fall back to raw
-            return template
 
-    def _build_embed(self, title: str, message: str, image_url: Optional[str], member: discord.abc.User, guild: discord.Guild) -> discord.Embed:
-        embed = discord.Embed(
-            title=self._format(title, member, guild),
-            description=self._format(message, member, guild),
-            color=discord.Color.blurple(),
-        )
+    def _build_embed(
+        self,
+        title_tmpl: str,
+        msg_tmpl: str,
+        image_url: Optional[str],
+        member: discord.abc.User | discord.Member,
+        guild: discord.Guild,
+    ) -> discord.Embed:
+        ph = self._placeholders(member, guild)
+        title = title_tmpl.format_map(ph)
+        desc = msg_tmpl.format_map(ph)
+        embed = discord.Embed(title=title, description=desc, color=discord.Color.blurple())
         if image_url:
             embed.set_image(url=image_url)
-        embed.set_thumbnail(url=member.display_avatar.url if hasattr(member, "display_avatar") else discord.Embed.Empty)
         return embed
+
+    def _choose_join_channel(self, guild: discord.Guild, wc: WelcomeConfig) -> Optional[discord.TextChannel]:
+        ch_id = wc.join_channel_id or wc.channel_id
+        return guild.get_channel(ch_id) if ch_id else None  # type: ignore
+
+    def _choose_leave_channel(self, guild: discord.Guild, wc: WelcomeConfig) -> Optional[discord.TextChannel]:
+        ch_id = wc.leave_channel_id or wc.channel_id
+        return guild.get_channel(ch_id) if ch_id else None  # type: ignore
+
+    async def _send_basic_log(self, channel: Optional[discord.TextChannel], text: str) -> None:
+        if isinstance(channel, discord.TextChannel):
+            try:
+                await channel.send(text)
+            except discord.Forbidden:
+                pass
+
+    async def _maybe_assign_autorole(self, member: discord.Member) -> None:
+        """Assign the configured role on join if enabled and possible."""
+        guild = member.guild
+        wc = self.store.cfg(guild.id).welcome
+
+        if not wc.autorole_on:
+            return
+        if member.bot and wc.autorole_ignore_bots:
+            return
+        if wc.autorole_role_id is None:
+            return
+
+        role = guild.get_role(wc.autorole_role_id)
+        if role is None:
+            return  # role deleted or not visible
+
+        # Check basic permission/hierarchy safety
+        me = guild.me
+        if me is None:
+            return
+        if not me.guild_permissions.manage_roles:
+            return
+        if role >= me.top_role:
+            return
+
+        try:
+            await member.add_roles(role, reason="Auto-role on member join")
+        except discord.Forbidden:
+            pass
+        except discord.HTTPException:
+            pass
 
     async def _send_welcome(self, member: discord.Member) -> None:
         guild = member.guild
-        cfg = self.store.cfg(guild.id).welcome
-        if not cfg.channel_id:
-            return
-        channel = guild.get_channel(cfg.channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            return
-        embed = self._build_embed(cfg.join_title, cfg.join_message, cfg.join_image_url, member, guild)
-        try:
-            await channel.send(embed=embed)
-        except discord.Forbidden:
-            pass
+        wc = self.store.cfg(guild.id).welcome
+
+        # Pretty embed to join channel
+        target_ch = self._choose_join_channel(guild, wc)
+        if isinstance(target_ch, discord.TextChannel):
+            try:
+                embed = self._build_embed(wc.join_title, wc.join_message, wc.join_image_url, member, guild)
+                await target_ch.send(embed=embed)
+            except discord.Forbidden:
+                pass
+
+        # Optional basic log
+        if wc.log_join:
+            log_ch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else target_ch
+            line = f"JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}."
+            await self._send_basic_log(log_ch, line)
 
     async def _send_leave(self, member: discord.Member) -> None:
         guild = member.guild
-        cfg = self.store.cfg(guild.id).welcome
-        if not cfg.channel_id:
-            return
-        channel = guild.get_channel(cfg.channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            return
-        embed = self._build_embed(cfg.leave_title, cfg.leave_message, cfg.leave_image_url, member, guild)
+        wc = self.store.cfg(guild.id).welcome
+
+        # Pretty embed to leave channel
+        target_ch = self._choose_leave_channel(guild, wc)
+        if isinstance(target_ch, discord.TextChannel):
+            try:
+                embed = self._build_embed(wc.leave_title, wc.leave_message, wc.leave_image_url, member, guild)
+                await target_ch.send(embed=embed)
+            except discord.Forbidden:
+                pass
+
+        # Optional basic log
+        if wc.log_leave:
+            log_ch = guild.get_channel(wc.log_leave_channel_id) if wc.log_leave_channel_id else target_ch
+            line = f"LEAVE: {getattr(member, 'display_name', member.name)} ({member.id}) left. Members now: {guild.member_count}."
+            await self._send_basic_log(log_ch, line)
+
+    # ------------- Events -------------
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
         try:
-            await channel.send(embed=embed)
-        except discord.Forbidden:
+            # Assign role first (so welcome placeholders like {count} reflect post-join state anyway)
+            await self._maybe_assign_autorole(member)
+        except Exception:
+            pass
+        try:
+            await self._send_welcome(member)
+        except Exception:
+            # Avoid crashing on unexpected errors
             pass
 
-    # ======== Slash Commands: Reaction Roles (unchanged) ========
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        try:
+            await self._send_leave(member)
+        except Exception:
+            pass
 
-    @reactionroles.command(name="create", description="Create a new reaction-role embed")
-    async def rr_create(self, interaction: discord.Interaction, channel: discord.TextChannel, title: str, description: str):
-        embed = discord.Embed(title=title, description=description, color=discord.Color.blurple())
-        embed.add_field(name="React for Roles", value="*(No emoji → role mappings yet. Use `/reactionroles add`.)*", inline=False)
-        await channel.send(embed=embed)
-        await interaction.response.send_message("✅ Created reaction-role message.", ephemeral=True)
+    # ------------- Slash Commands -------------
 
-    @reactionroles.command(name="add", description="Map an emoji to a role")
-    async def rr_add(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str, emoji: str, role: discord.Role):
-        guild = interaction.guild
-        mid = int(message_id)
-        message = await self._fetch_message(channel, mid)
-        if not message:
-            return await interaction.response.send_message("❌ Message not found.", ephemeral=True)
-        emoji_key = self._norm_emoji(emoji)
-        cfg = self.store.cfg(guild.id)
-        cfg.set_mapping(mid, emoji_key, role.id)
-        await self.store.save()
-        await self._ensure_reaction(message, emoji_key)
-        await self._update_rr_embed_view(guild, message, cfg)
-        await interaction.response.send_message(f"✅ Mapped {emoji} to {role.name}.", ephemeral=True)
-
-    @reactionroles.command(name="remove", description="Remove an emoji mapping")
-    async def rr_remove(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str, emoji: str):
-        guild = interaction.guild
-        mid = int(message_id)
-        emoji_key = self._norm_emoji(emoji)
-        cfg = self.store.cfg(guild.id)
-        ok = cfg.remove_mapping(mid, emoji_key)
-        await self.store.save()
-        message = await self._fetch_message(channel, mid)
-        if message:
-            await self._update_rr_embed_view(guild, message, cfg)
-        if ok:
-            await interaction.response.send_message(f"✅ Removed mapping for {emoji}.", ephemeral=True)
-        else:
-            await interaction.response.send_message("⚠️ No mapping found.", ephemeral=True)
-
-    @reactionroles.command(name="list", description="List mappings for a message")
-    async def rr_list(self, interaction: discord.Interaction, channel: discord.TextChannel, message_id: str):
-        guild = interaction.guild
-        mid = int(message_id)
-        cfg = self.store.cfg(guild.id)
-        text = self._rr_lines(guild, cfg, mid)
-        embed = discord.Embed(title="Reaction-role Mappings", description=text, color=discord.Color.blurple())
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    # ======== Slash Commands: Welcome/Leave ========
-
-    @welcome.command(name="set", description="Configure welcome (join) & leave channel and messages")
+    @welcome.command(name="set", description="Configure welcome/leave, logging, and auto-role on join")
     @app_commands.describe(
-        channel="Channel for welcome/leave messages",
+        join_channel="Channel for WELCOME (join) embeds",
+        leave_channel="Channel for LEAVE embeds",
+        log_join="Also send a basic log line when someone joins?",
+        log_leave="Also send a basic log line when someone leaves?",
+        log_join_channel="Channel for JOIN logs (defaults to join_channel if not set)",
+        log_leave_channel="Channel for LEAVE logs (defaults to leave_channel if not set)",
         join_title="Title for welcome embed (supports {member}, {name}, {guild}, {count})",
         join_message="Body for welcome embed (supports placeholders)",
         join_image_url="Image URL for welcome embed (optional)",
         leave_title="Title for leave embed (supports placeholders)",
         leave_message="Body for leave embed (supports placeholders)",
         leave_image_url="Image URL for leave embed (optional)",
+        autorole_on="Enable automatic role assignment on member join?",
+        autorole_role="Which role to assign when a member joins",
+        autorole_ignore_bots="If enabled, bots will NOT receive the auto-role",
     )
     @app_commands.checks.has_permissions(manage_guild=True)
     async def welcome_set(
         self,
         interaction: discord.Interaction,
-        channel: discord.TextChannel,
+        join_channel: Optional[discord.TextChannel] = None,
+        leave_channel: Optional[discord.TextChannel] = None,
+        log_join: Optional[bool] = None,
+        log_leave: Optional[bool] = None,
+        log_join_channel: Optional[discord.TextChannel] = None,
+        log_leave_channel: Optional[discord.TextChannel] = None,
         join_title: Optional[str] = None,
         join_message: Optional[str] = None,
         join_image_url: Optional[str] = None,
         leave_title: Optional[str] = None,
         leave_message: Optional[str] = None,
         leave_image_url: Optional[str] = None,
+        autorole_on: Optional[bool] = None,
+        autorole_role: Optional[discord.Role] = None,
+        autorole_ignore_bots: Optional[bool] = None,
     ):
+        if interaction.guild is None:
+            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+
         guild = interaction.guild
         gc = self.store.cfg(guild.id)
         wc = gc.welcome
 
-        wc.channel_id = channel.id
+        # Channels
+        if join_channel is not None:
+            wc.join_channel_id = join_channel.id
+        if leave_channel is not None:
+            wc.leave_channel_id = leave_channel.id
+
+        # Logging
+        if log_join is not None:
+            wc.log_join = log_join
+        if log_leave is not None:
+            wc.log_leave = log_leave
+        if log_join_channel is not None:
+            wc.log_join_channel_id = log_join_channel.id
+        if log_leave_channel is not None:
+            wc.log_leave_channel_id = log_leave_channel.id
+
+        # Content
         if join_title is not None:
             wc.join_title = join_title
         if join_message is not None:
@@ -307,32 +363,74 @@ class ReactionRoles(commands.Cog):
         if leave_image_url is not None:
             wc.leave_image_url = leave_image_url or None
 
+        # Auto-role
+        if autorole_on is not None:
+            wc.autorole_on = autorole_on
+        if autorole_role is not None:
+            wc.autorole_role_id = autorole_role.id
+        if autorole_ignore_bots is not None:
+            wc.autorole_ignore_bots = autorole_ignore_bots
+
         await self.store.save()
 
-        await interaction.response.send_message(
-            f"✅ Welcome/Leave settings saved for {channel.mention}.",
-            ephemeral=True,
+        parts = []
+        if wc.join_channel_id:
+            parts.append(f"Join → <#{wc.join_channel_id}>")
+        if wc.leave_channel_id:
+            parts.append(f"Leave → <#{wc.leave_channel_id}>")
+        parts.append(f"Log Join: {'ON' if wc.log_join else 'OFF'}" + (f" → <#{wc.log_join_channel_id}>" if wc.log_join_channel_id else ""))
+        parts.append(f"Log Leave: {'ON' if wc.log_leave else 'OFF'}" + (f" → <#{wc.log_leave_channel_id}>" if wc.log_leave_channel_id else ""))
+        parts.append(
+            f"Auto-Role: {'ON' if wc.autorole_on else 'OFF'}"
+            + (f" → <@&{wc.autorole_role_id}>" if wc.autorole_role_id else "")
+            + (", bots ignored" if wc.autorole_ignore_bots else ", bots included")
         )
+
+        await interaction.response.send_message("✅ Saved. " + " | ".join(parts), ephemeral=True)
 
     @welcome.command(name="show", description="Show the current welcome/leave configuration")
     async def welcome_show(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+
         guild = interaction.guild
         wc = self.store.cfg(guild.id).welcome
-        ch = guild.get_channel(wc.channel_id) if wc.channel_id else None
+
+        jch = guild.get_channel(wc.join_channel_id or wc.channel_id) if (wc.join_channel_id or wc.channel_id) else None
+        lch = guild.get_channel(wc.leave_channel_id or wc.channel_id) if (wc.leave_channel_id or wc.channel_id) else None
+        ljch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else None
+        llch = guild.get_channel(wc.log_leave_channel_id) if wc.log_leave_channel_id else None
+        arole = guild.get_role(wc.autorole_role_id) if wc.autorole_role_id else None
 
         desc = [
-            f"**Channel:** {ch.mention if isinstance(ch, discord.TextChannel) else '*Not set*'}",
+            "**Channels**",
+            f"• **Join embeds:** {jch.mention if isinstance(jch, discord.TextChannel) else '*Not set*'}",
+            f"• **Leave embeds:** {lch.mention if isinstance(lch, discord.TextChannel) else '*Not set*'}",
             "",
-            "**Welcome (join)**",
+            "**Logging** (basic text, no embeds)",
+            f"• **Join logs:** {'ON' if wc.log_join else 'OFF'}"
+            + (f" → {ljch.mention}" if isinstance(ljch, discord.TextChannel) else (" → *join channel*" if wc.log_join else "")),
+            f"• **Leave logs:** {'ON' if wc.log_leave else 'OFF'}"
+            + (f" → {llch.mention}" if isinstance(llch, discord.TextChannel) else (" → *leave channel*" if wc.log_leave else "")),
+            "",
+            "**Welcome (join) message**",
             f"• **Title:** {wc.join_title}",
             f"• **Message:** {wc.join_message}",
             f"• **Image:** {wc.join_image_url or '*None*'}",
             "",
-            "**Leave**",
+            "**Leave message**",
             f"• **Title:** {wc.leave_title}",
             f"• **Message:** {wc.leave_message}",
             f"• **Image:** {wc.leave_image_url or '*None*'}",
+            "",
+            "**Auto-Role on Join**",
+            f"• **Enabled:** {'Yes' if wc.autorole_on else 'No'}",
+            f"• **Role:** {arole.mention if arole else '*None*'}",
+            f"• **Ignore bots:** {'Yes' if wc.autorole_ignore_bots else 'No'}",
+            "",
+            "_Placeholders: {member} (mention), {name}, {guild}, {count}_",
         ]
+
         embed = discord.Embed(
             title="Welcome/Leave Configuration",
             description="\n".join(desc),
@@ -340,45 +438,59 @@ class ReactionRoles(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @welcome.command(name="test", description="Send a test welcome and leave message to the configured channel")
+    @welcome.command(name="test", description="Send a test welcome/leave preview (and logs if enabled)")
     async def welcome_test(self, interaction: discord.Interaction):
+        if interaction.guild is None:
+            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+
         guild = interaction.guild
         wc = self.store.cfg(guild.id).welcome
-        if not wc.channel_id:
-            return await interaction.response.send_message("⚠️ No channel configured. Use `/welcome set` first.", ephemeral=True)
 
-        # Use the command invoker as the target for preview
-        member = guild.get_member(interaction.user.id)
-        if not member:
-            # Fallback to user if not cached as Member (DM/testing edge cases)
-            member = interaction.user  # type: ignore
+        # Test member = invoker
+        member = guild.get_member(interaction.user.id) or interaction.user  # type: ignore
 
-        # Send both join and leave previews
-        ch = guild.get_channel(wc.channel_id)
-        if isinstance(ch, discord.TextChannel):
-            join_embed = self._build_embed(wc.join_title, wc.join_message, wc.join_image_url, member, guild)
-            leave_embed = self._build_embed(wc.leave_title, wc.leave_message, wc.leave_image_url, member, guild)
-            try:
-                await ch.send(content="**[TEST]** Welcome preview:", embed=join_embed)
-                await ch.send(content="**[TEST]** Leave preview:", embed=leave_embed)
-                await interaction.response.send_message("✅ Sent test welcome & leave messages.", ephemeral=True)
-            except discord.Forbidden:
-                await interaction.response.send_message("❌ I don't have permission to send messages in the configured channel.", ephemeral=True)
-        else:
-            await interaction.response.send_message("⚠️ Configured channel is invalid. Set it again with `/welcome set`.", ephemeral=True)
+        # Targets
+        jch = self._choose_join_channel(guild, wc)
+        lch = self._choose_leave_channel(guild, wc)
 
-    # ======== Event Listeners: Welcome/Leave ========
+        sent_any = False
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        await self._send_welcome(member)
+        # Join preview
+        if isinstance(jch, discord.TextChannel):
+            await jch.send(
+                content="**[TEST]** Welcome preview:",
+                embed=self._build_embed(wc.join_title, wc.join_message, wc.join_image_url, member, guild),
+            )
+            sent_any = True
+            if wc.log_join:
+                ljch = guild.get_channel(wc.log_join_channel_id) if wc.log_join_channel_id else jch
+                await self._send_basic_log(
+                    ljch,
+                    f"[TEST] JOIN: {getattr(member, 'display_name', member.name)} ({member.id}) joined. Members now: {guild.member_count}.",
+                )
 
-    @commands.Cog.listener()
-    async def on_member_remove(self, member: discord.Member):
-        # Note: member.guild.member_count already reflects the updated count after removal
-        await self._send_leave(member)
+        # Leave preview
+        if isinstance(lch, discord.TextChannel):
+            await lch.send(
+                content="**[TEST]** Leave preview:",
+                embed=self._build_embed(wc.leave_title, wc.leave_message, wc.leave_image_url, member, guild),
+            )
+            sent_any = True
+            if wc.log_leave:
+                llch = guild.get_channel(wc.log_leave_channel_id) if wc.log_leave_channel_id else lch
+                await self._send_basic_log(
+                    llch,
+                    f"[TEST] LEAVE: {getattr(member, 'display_name', member.name)} ({member.id}) left. Members now: {guild.member_count}.",
+                )
 
-# --------------------------- Setup ---------------------------
+        if not sent_any:
+            return await interaction.response.send_message("⚠️ No join/leave channels configured. Use `/welcome set`.", ephemeral=True)
 
-async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(ReactionRoles(bot))
+        await interaction.response.send_message("✅ Sent test messages (and logs if enabled).", ephemeral=True)
+
+
+# -----------------------------
+# Extension setup
+# -----------------------------
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Turtle(bot))
