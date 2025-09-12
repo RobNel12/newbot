@@ -765,6 +765,8 @@ class TicketCog(commands.Cog):
         if changed:
             save_config(self.config)
 
+    
+
     def build_ticket_welcome_embed(self, member: discord.Member, coach_role: Optional[discord.Role], thumb_url: str, banner_url: str) -> discord.Embed:
         display = member.display_name
         coach_mention = coach_role.mention if coach_role else "@Coach"
@@ -990,6 +992,27 @@ class TicketCog(commands.Cog):
             auto["message_id"] = msg.id
             save_config(self.config)
 
+    # In class TicketCog
+    async def prune_roster_for_guild(self, guild: discord.Guild) -> int:
+        """Remove roster entries for members who no longer have the claim role (or left)."""
+        g = self.config.setdefault(str(guild.id), {})
+        roster = g.setdefault("roster", {})
+        role = self._get_claim_role(guild)
+        if not role or not roster:
+            return 0
+    
+        removed = 0
+        for uid in list(roster.keys()):
+            member = guild.get_member(int(uid))
+            # Remove if member missing OR member lacks the claim role
+            if (member is None) or (role not in getattr(member, "roles", [])):
+                roster.pop(uid, None)
+                removed += 1
+    
+        if removed:
+            save_config(self.config)
+            await self.update_roster_message(guild.id)
+        return removed
 
     async def autopost_loop(self):
         await self.bot.wait_until_ready()
@@ -999,15 +1022,26 @@ class TicketCog(commands.Cog):
                 for gid, g in list(self.config.items()):
                     if gid == "_channel_meta":
                         continue
+    
+                    guild = self.bot.get_guild(int(gid))
+                    if guild:
+                        # 🔍 Periodically prune the roster to drop members without the claim role
+                        try:
+                            await self.prune_roster_for_guild(guild)
+                        except Exception:
+                            pass
+    
                     auto = g.get("roster_autopost")
                     if not auto:
                         continue
+    
                     interval = max(1, int(auto.get("interval", 60))) * 60
                     last = float(auto.get("last_post", 0))
                     if now - last >= interval:
                         await self.update_roster_message(int(gid))
                         auto["last_post"] = time.time()
                         save_config(self.config)
+    
                 await asyncio.sleep(60)
             except Exception:
                 await asyncio.sleep(60)
@@ -1022,6 +1056,7 @@ class TicketCog(commands.Cog):
             entry["bad"] += 1
         save_config(self.config)
         await self.update_roster_message(guild_id)
+
 
     # ---------- Claim role: config & syncing (NEW) ----------
     def _get_claim_role(self, guild: discord.Guild) -> Optional[discord.Role]:
