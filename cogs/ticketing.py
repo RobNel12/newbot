@@ -450,7 +450,7 @@ class TicketChannelView(discord.ui.View):
     
         await self._lock_channel(interaction.channel, lock=False)
         self.closed = False
-        await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=True)
+        await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=False)
 
 
     async def _lock_channel(self, channel: discord.TextChannel, lock: bool):
