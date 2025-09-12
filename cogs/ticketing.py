@@ -400,12 +400,19 @@ class TicketChannelView(discord.ui.View):
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.secondary, emoji="🔒", custom_id="ticket:close", row=0)
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        claim_role = self.cog._get_claim_role(interaction.guild)
+        is_admin = interaction.user.guild_permissions.administrator
+        is_claimer = (claim_role in interaction.user.roles) if claim_role else False
+        if not (is_admin or is_claimer):
+            return await interaction.response.send_message("Only staff can close tickets.", ephemeral=True)
+    
         if self.closed:
             return await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
-
-        # Ask for confirmation
+    
+        # Ask for confirmation (same as now)
         view = ConfirmCloseView(self, interaction.user)
         await interaction.response.send_message("Are you sure you want to close this ticket?", view=view, ephemeral=True)
+
 
     @discord.ui.button(label="Delete", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket:delete", row=0)
     async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -632,6 +639,10 @@ class ConfirmCloseView(discord.ui.View):
         opener_display = opener.mention if opener else f"<@{self.parent.opener_id}>"
         claimer_member = interaction.guild.get_member(self.parent.claimer_id) or interaction.user
         claimer_display = claimer_member.mention
+
+        if not self.parent.claimer_id:
+            return  # no review if no claimer
+
 
         await interaction.channel.send(
             f"{opener_display}, please leave a review for {claimer_display}:",
