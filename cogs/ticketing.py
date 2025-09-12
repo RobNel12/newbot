@@ -216,10 +216,16 @@ class TicketPanelView(discord.ui.View):
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
+        # after:
         for rid in cfg["view_roles"]:
             role = guild.get_role(rid)
             if role:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        
+        # add this:
+        claim_role = self.cog._get_claim_role(guild)
+        if claim_role:
+            overwrites[claim_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
 
         channel = await guild.create_text_channel(chan_name, category=category, overwrites=overwrites)
 
@@ -434,20 +440,44 @@ class TicketChannelView(discord.ui.View):
     async def reopen_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not self.closed:
             return await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+    
+        # OPTIONAL permission gate:
+        claim_role = self.cog._get_claim_role(interaction.guild)
+        is_admin = interaction.user.guild_permissions.administrator
+        is_claimer = (claim_role in interaction.user.roles) if claim_role else False
+        if not (is_admin or is_claimer):
+            return await interaction.response.send_message("Only staff can reopen closed tickets.", ephemeral=True)
+    
         await self._lock_channel(interaction.channel, lock=False)
         self.closed = False
         await interaction.response.send_message("🔓 Ticket reopened.", ephemeral=True)
 
 
     async def _lock_channel(self, channel: discord.TextChannel, lock: bool):
-        overwrites = channel.overwrites
+        overwrites = channel.overwrites.copy()
+        claim_role = self.cog._get_claim_role(channel.guild)
+    
         for target, perms in list(overwrites.items()):
             if isinstance(target, (discord.Role, discord.Member)):
+                # If this is the claim role, keep them talking even when locked
+                if claim_role and target == claim_role:
+                    # Ensure they keep access and can speak
+                    perms.view_channel = True if perms.view_channel is not False else perms.view_channel
+                    perms.send_messages = True
+                    overwrites[target] = perms
+                    continue
+    
+                # Everyone else is locked/unlocked normally
                 if perms.send_messages is not None:
                     perms.send_messages = not lock
                     overwrites[target] = perms
+    
+        # If there was no explicit overwrite for the claim role, add one
+        if claim_role and claim_role not in overwrites:
+            overwrites[claim_role] = discord.PermissionOverwrite(view_channel=True, send_messages=True)
+    
         await channel.edit(overwrites=overwrites)
-
+    
     async def _log_and_delete(self, channel: discord.TextChannel, deleted_by: discord.Member):
         # Count human participants (skip obvious bot/system prompts)
         counts: Dict[int, int] = {}
